@@ -9,7 +9,7 @@
 int readArgs(int argv, const char **args, lp_opts *opts)
 {
 
-	lp_defaultopts(opts);
+	lp_setopts_v2(opts, 255, 16, LP_CSF_ALPHANUMERIC);
 	
 	char pass[1024];
 	/* parsing goes here */
@@ -20,7 +20,6 @@ int readArgs(int argv, const char **args, lp_opts *opts)
 	}
 	snprintf(pass, sizeof pass, "%s", args[3]);
 	
-	opts->flags = LP_CSF_ALPHANUMERIC;
 	/* end of parsing */
 	
 	return 0;
@@ -36,7 +35,8 @@ int main(int argc, const char **argv)
 	readArgs(argc, argv, &opts);
 	
 	char genpass[opts.length + 1];
-	lp_generate(argv[1], argv[2], argv[3], &opts, genpass, sizeof genpass);
+	genpass[opts.length] = 0;
+	lp_genpass_v2(argv[1], argv[2], argv[3], &opts, genpass, sizeof genpass);
 	printf("%s\n", genpass);
 	return 0;
 }

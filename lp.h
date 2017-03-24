@@ -28,12 +28,12 @@ typedef enum
 typedef enum
 {
 	LP_OV_VERSION     = 2,
-	LP_OV_KEYLEN      = 32    , LP_OV_KEYLEN_MAX = 128,
-	LP_OV_ITER        = 100000, LP_OV_ITER_MAX = 0x100000,
-	LP_OV_COUNTER     = 1,
-	LP_OV_COUNTER_MAX = 0xFFFF, LP_OV_COUNTERLEN = 4,
-	LP_OV_LENGTH      = 16,
-	LP_OV_FLAGS       = LP_CSF_ALPHANUMERIC,
+	LP_OV_KEYLEN      = 32,
+	LP_OV_ITER        = 100000,
+	LP_OV_COUNTER     = 1, LP_OV_COUNTER_MIN = 1, LP_OV_COUNTER_MAX = 0x0FFFFFFF,
+	LP_OV_LENGTH      = 16, LP_OV_LENGTH_MIN = 5, LP_OV_LENGTH_MAX = 35,
+	LP_OV_FLAGS       = LP_CSF_ALL,
+	LP_OV_DIGEST      = LP_MD_SHA256
 } lp_optvalues;
 
 typedef struct lp_opts_s
@@ -48,24 +48,21 @@ typedef struct lp_opts_s
 	int flags;
 } lp_opts;
 
-//extern lp_opts_t defopts;
-void lp_defaultopts(lp_opts *opts);
-
-
 typedef enum
 {
-	LP_ERR_VERSION = -1,
-	LP_ERR_KEYLEN  = -2,
-	LP_ERR_PASSLEN = -3,
-	LP_ERR_ITER    = -4,
-	LP_ERR_COUNTER = -5,
+	LP_ERR_VERSION = -1, // v2
+	LP_ERR_KEYLEN  = -2, // v2
+	LP_ERR_PASSLEN = -3, // v2
+	LP_ERR_ITER    = -4, // v2
+	LP_ERR_COUNTER = -5, // v2
 	LP_ERR_SALTLEN = -6,
 	LP_ERR_SECRET  = -7,
-	LP_ERR_DIGEST  = -8,
-	LP_ERR_FLAGS   = -9,
+	LP_ERR_DIGEST  = -8, // v2
+	LP_ERR_FLAGS   = -9, // v2
 	
 } lp_error;
 
-int lp_generate(const char* site,  const char* login, const char* secret, lp_opts *opts, char* pass, unsigned passlen);
+void lp_setopts_v2(lp_opts *opts, unsigned counter, unsigned length, unsigned flags);
 
+int lp_genpass_v2(const char* site,  const char* login, const char* secret, lp_opts *opts, char* pass, unsigned passlen);
 #endif //LP_H
