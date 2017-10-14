@@ -1,39 +1,38 @@
-typedef struct evp_md_st EVP_MD;
-int PKCS5_PBKDF2_HMAC(const char *pass, int passlen,
-                       const unsigned char *salt, int saltlen, int iter,
-                       const EVP_MD *digest,
-                       int keylen, unsigned char *out);
-
-const EVP_MD *EVP_md5(void);
-const EVP_MD *EVP_md5_sha1(void);
-const EVP_MD *EVP_sha1(void);
-const EVP_MD *EVP_sha224(void);
-const EVP_MD *EVP_sha256(void);
-const EVP_MD *EVP_sha384(void);
-const EVP_MD *EVP_sha512(void);
-
-
-typedef struct bignum_st BIGNUM;
-BIGNUM *BN_new(void);
-void BN_free(BIGNUM *a);
-
-typedef struct bignum_ctx BN_CTX;
-BN_CTX *BN_CTX_new(void);
-void BN_CTX_free(BN_CTX *c);
-
-void BN_CTX_start(BN_CTX *ctx);
-BIGNUM *BN_CTX_get(BN_CTX *ctx);
-void BN_CTX_end(BN_CTX *ctx);
-
-BIGNUM *BN_bin2bn(const unsigned char *s, int len, BIGNUM *ret);
-int BN_set_word(BIGNUM *a, unsigned long w);
-unsigned long BN_get_word(BIGNUM *a);
-int BN_div(BIGNUM *dv, BIGNUM *rem, const BIGNUM *a, const BIGNUM *d,
-         BN_CTX *ctx);
-
-BIGNUM *BN_copy(BIGNUM *a, const BIGNUM *b);
+#include <openssl/evp.h>
 
 #include "lp.h"
+
+struct lp_ctx_st
+{
+	unsigned version;
+	unsigned keylen;
+	unsigned iterations;
+	int digest;
+
+	unsigned counter;
+	unsigned length;
+	unsigned charsets;
+};
+
+typedef enum
+{
+	LP_MD_MD5    = 0,
+	LP_MD_SHA1   = 1,
+	LP_MD_SHA224 = 2,
+	LP_MD_SHA256 = 3, // only valid value
+	LP_MD_SHA384 = 4,
+	LP_MD_SHA512 = 5,
+
+} lp_digest;
+
+
+typedef enum
+{
+	LP_VERSION     = 2,
+	LP_KEYLEN      = 32,
+	LP_ITERS       = 100000,
+	LP_DIGEST      = LP_MD_SHA256
+} lp_defaults;
 
 typedef const EVP_MD* (*evpmd_f)(void);
 
@@ -42,7 +41,6 @@ typedef struct evpmd_s
 	int id;
 	evpmd_f md;
 } evpmd_t;
-
 
 static const evpmd_t mdlist[] =
 {
@@ -67,43 +65,43 @@ static const charset_t cslist[] =
 {
 	{LP_CSF_LOWERCASE, "abcdefghijklmnopqrstuvwxyz"        , 26},
 	{LP_CSF_UPPERCASE, "ABCDEFGHIJKLMNOPQRSTUVWXYZ"        , 26},
-	{LP_CSF_NUMBERIC , "0123456789"                        , 10},
+	{LP_CSF_DIGITS , "0123456789"                        , 10},
 	{LP_CSF_SYMBOLS  , "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 32}
 };
 static const unsigned cslistsize = sizeof(cslist)/sizeof(cslist[0]);
 #define MAXSETLEN 94
 
-static unsigned long longdivEntropy(BIGNUM *dv, BIGNUM *rem, BIGNUM *ent, const BIGNUM *d, BN_CTX *ctx)
+static unsigned long longdivEntropy(BIGNUM *dv, BIGNUM *rem, BIGNUM *ent, const BIGNUM *d, BN_CTX *bnctx)
 {
-	BN_div(dv, rem, ent, d, ctx);
+	BN_div(dv, rem, ent, d, bnctx);
 	BN_copy(ent, dv);
 	return BN_get_word(rem);
 }
 
-static void consumeEntropy(BN_CTX *ctx, BIGNUM *ent, char *pass, int passlen, const char *set, int setlen)
+static void consumeEntropy(BN_CTX *bnctx, BIGNUM *ent, char *pass, int passlen, const char *set, int setlen)
 {
-	BN_CTX_start(ctx);
-	BIGNUM *dv = BN_CTX_get(ctx);
-	BIGNUM *rem = BN_CTX_get(ctx);
-	BIGNUM *d = BN_CTX_get(ctx); BN_set_word(d, setlen);
+	BN_CTX_start(bnctx);
+	BIGNUM *dv = BN_CTX_get(bnctx);
+	BIGNUM *rem = BN_CTX_get(bnctx);
+	BIGNUM *d = BN_CTX_get(bnctx); BN_set_word(d, setlen);
 	int i = 0;
 	for(i = 0; i < passlen; i++)
 	{
-		pass[i] = set[longdivEntropy(dv, rem, ent, d, ctx)];
+		pass[i] = set[longdivEntropy(dv, rem, ent, d, bnctx)];
 	}
 	
-	BN_CTX_end(ctx);
+	BN_CTX_end(bnctx);
 }
 
-static int consumeEntropyInt(BN_CTX *ctx, BIGNUM *ent, int setlen)
+static int consumeEntropyInt(BN_CTX *bnctx, BIGNUM *ent, int setlen)
 {
-	BN_CTX_start(ctx);
-	BIGNUM *dv = BN_CTX_get(ctx);
-	BIGNUM *rem = BN_CTX_get(ctx);
-	BIGNUM *d = BN_CTX_get(ctx); BN_set_word(d, setlen);
+	BN_CTX_start(bnctx);
+	BIGNUM *dv = BN_CTX_get(bnctx);
+	BIGNUM *rem = BN_CTX_get(bnctx);
+	BIGNUM *d = BN_CTX_get(bnctx); BN_set_word(d, setlen);
 	int i = 0;
-	i = longdivEntropy(dv, rem, ent, d, ctx);
-	BN_CTX_end(ctx);
+	i = longdivEntropy(dv, rem, ent, d, bnctx);
+	BN_CTX_end(bnctx);
 	return i;
 }
 
@@ -146,22 +144,23 @@ static void mymemcpy(char *dst, const char *src, unsigned count)
 	}
 }
 
-static void mypushchar(char *dst, unsigned dlen, unsigned pos, char c)
+static void mypushchar(char *dst, unsigned len, unsigned pos, char c)
 {
-	unsigned i;
-	for(i = dlen; i > pos; i--)
-	{
-		dst[i - 1] = dst[i - 2];
-	}
-	dst[i] = c;
+	//for(i = len; i > pos; count--)
+	//{
+	//	dst[i] = dst[i - 1];
+	//}
+	
+	mymemcpy(dst + pos + 1, dst + pos, len - pos);
+	dst[pos] = c;
 }
 
-int lp_generate(const char* site,  const char* login, const char* secret, lp_opts *opts, char* pass, unsigned passlen)
+int LP_generate( LP_CTX *ctx, const char* site,  const char* login, const char* secret, char* pass, unsigned passlen)
 {
-	if((opts->flags & LP_CSF_ALL) == 0 || opts->length == 0 || passlen == 0)
+	if((ctx->charsets & LP_CSF_ALL) == 0 || ctx->length == 0 || passlen == 0)
 		return 0;
 	
-	if(mystrnlen(site) + mystrnlen(login) + myhexlen(opts->counter) > LPMAXSTRLEN)
+	if(mystrnlen(site) + mystrnlen(login) + myhexlen(ctx->counter) > LPMAXSTRLEN)
 		return LP_ERR_SALTLEN;
 	
 	if(mystrnlen(secret) > LPMAXSTRLEN)
@@ -171,7 +170,7 @@ int lp_generate(const char* site,  const char* login, const char* secret, lp_opt
 	unsigned i;
 	for(i = 0; i < mdlistsize; i++)
 	{
-		if(opts->digest == mdlist[i].id)
+		if(ctx->digest == mdlist[i].id)
 		{
 			md = mdlist[i].md;
 			break;
@@ -185,7 +184,7 @@ int lp_generate(const char* site,  const char* login, const char* secret, lp_opt
 	unsigned setnum = 0; // num. of sets used
 	for(i = 0; i < cslistsize; i++)
 	{
-		if(opts->flags & cslist[i].flag)
+		if(ctx->charsets & cslist[i].flag)
 		{
 			mymemcpy(set + setlen, cslist[i].set, cslist[i].setlen);
 			setlen += cslist[i].setlen;
@@ -195,7 +194,7 @@ int lp_generate(const char* site,  const char* login, const char* secret, lp_opt
 	
 	unsigned saltlen = 0;
 	char outbuf[LPMAXSTRLEN];
-	//saltlen = snprintf(outbuf, sizeof outbuf, "%s%s%x", site, login, opts->counter);
+	//saltlen = snprintf(outbuf, sizeof outbuf, "%s%s%x", site, login, ctx->counter);
 	
 	unsigned len = 0;
 	
@@ -208,88 +207,115 @@ int lp_generate(const char* site,  const char* login, const char* secret, lp_opt
 	mymemcpy(outbuf + saltlen, login, len);
 	saltlen += len;
 	
-	len = myhexlen(opts->counter);
-	mysprinthex(outbuf + saltlen, len, opts->counter);
+	len = myhexlen(ctx->counter);
+	mysprinthex(outbuf + saltlen, len, ctx->counter);
 	saltlen += len;
 	
 	
 	len = mystrnlen(secret);
 	
-	unsigned char keybuf[opts->keylen];
-	PKCS5_PBKDF2_HMAC(secret, len, (unsigned char *)outbuf, saltlen, opts->iterations, md(), sizeof keybuf, keybuf);
+	unsigned char keybuf[ctx->keylen];
+	PKCS5_PBKDF2_HMAC(secret, len, (unsigned char *)outbuf, saltlen, ctx->iterations, md(), sizeof keybuf, keybuf);
 	
-	BN_CTX *bn_ctx = BN_CTX_new();
+	BN_CTX *bnctx = BN_CTX_new();
 	BIGNUM *entropy = BN_new();
 	BN_bin2bn(keybuf, sizeof keybuf, entropy);
-	len = opts->length - setnum;
-	consumeEntropy(bn_ctx, entropy, outbuf, len, set, setlen);
+	len = ctx->length - setnum;
+	consumeEntropy(bnctx, entropy, outbuf, len, set, setlen);
 	
 	char toadd[setnum];
 	char *p = toadd;
 	for(i = 0; i < cslistsize; i++)
 	{
-		if(opts->flags & cslist[i].flag)
+		if(ctx->charsets & cslist[i].flag)
 		{
-			*p++ = cslist[i].set[consumeEntropyInt(bn_ctx, entropy, cslist[i].setlen)];
+			*p++ = cslist[i].set[consumeEntropyInt(bnctx, entropy, cslist[i].setlen)];
 		}
 	}
-	
+
 	int sep = 0;
 	for(i = 0; i < setnum; i++)
 	{
-		sep = consumeEntropyInt(bn_ctx, entropy, len);
+		sep = consumeEntropyInt(bnctx, entropy, len);
 		//memmove(outbuf + sep + 1, outbuf + sep, len - sep);
 		//outbuf[sep] = toadd[i];
-		mypushchar(outbuf, opts->length, sep, toadd[i]);
+		mypushchar(outbuf, len, sep, toadd[i]);
 		len++;
 	}
+
 	BN_free(entropy);
-	BN_CTX_free(bn_ctx);
-	
+	BN_CTX_free(bnctx);
+
 	mymemcpy(pass, outbuf, passlen > len ? len : passlen);
-	
+
 	return len;
 }
 
-void lp_setopts_v2(lp_opts *opts, unsigned counter, unsigned length, unsigned flags)
+LP_CTX* LP_CTX_new(void)
 {
-	opts->version = LP_OV_VERSION;
-	opts->keylen = LP_OV_KEYLEN;
-	opts->iterations = LP_OV_ITER;
-	opts->digest = LP_OV_DIGEST;
+	LP_CTX *lpctx = malloc(sizeof(LP_CTX));
+	lpctx->version = LP_VERSION;
+	lpctx->keylen = LP_KEYLEN;
+	lpctx->iterations = LP_ITERS;
+	lpctx->digest = LP_DIGEST;
 
-	opts->counter = LP_OV_COUNTER;
-	opts->length = LP_OV_LENGTH;
-	opts->flags = LP_OV_FLAGS;
-	
-	if(counter >= LP_OV_COUNTER_MIN && counter <= LP_OV_COUNTER_MAX)
-		opts->counter = counter;
-	if(length >= LP_OV_LENGTH_MIN && length <= LP_OV_LENGTH_MAX)
-		opts->length = length;
-	if(flags & LP_CSF_ALL)
-		opts->flags = flags;
+	lpctx->counter = LP_COUNTER_DEF;
+	lpctx->length = LP_LENGTH_DEF;
+	lpctx->charsets = LP_CSF_DEF;
+	return lpctx;
 }
 
-int lp_genpass_v2(const char* site,  const char* login, const char* secret, lp_opts *opts, char* pass, unsigned passlen)
+void LP_CTX_free(LP_CTX *ctx)
 {
-	if(opts->version != LP_OV_VERSION)
+	free(ctx);
+}
+
+unsigned LP_set_counter(LP_CTX *ctx, unsigned counter)
+{
+	if(counter >= LP_COUNTER_MIN && counter <= LP_COUNTER_MAX)
+	{
+		ctx->counter = counter;
+	}
+	return ctx->counter;
+}
+
+unsigned LP_set_length(LP_CTX *ctx, unsigned length)
+{
+	if(length >= LP_LENGTH_MIN && length <= LP_LENGTH_MAX)
+	{
+		ctx->length = length;
+	}
+	return ctx->length;
+}
+
+unsigned LP_set_charsets(LP_CTX *ctx, unsigned charsets)
+{
+	if(charsets & LP_CSF_ALL)
+	{
+		ctx->charsets = charsets & LP_CSF_ALL;
+	}
+	return ctx->charsets;
+}
+
+int LP_get_pass(LP_CTX *ctx, const char* site,  const char* login, const char* secret, char* pass, unsigned passlen)
+{
+	if(ctx->version != LP_VERSION)
 		return LP_ERR_VERSION;
-	if(opts->keylen != LP_OV_KEYLEN)
+	if(ctx->keylen != LP_KEYLEN)
 		return LP_ERR_KEYLEN;
-	if(opts->iterations != LP_OV_ITER)
+	if(ctx->iterations != LP_ITERS)
 		return LP_ERR_ITER;
-	if(opts->digest != LP_MD_SHA256)
+	if(ctx->digest != LP_MD_SHA256)
 		return LP_ERR_DIGEST;
 	
-	if(opts->length > LP_OV_LENGTH_MAX || opts->length < LP_OV_LENGTH_MIN)
+	if(ctx->length > LP_LENGTH_MAX || ctx->length < LP_LENGTH_MIN)
 		return LP_ERR_PASSLEN;
 
-	if(opts->counter > LP_OV_COUNTER_MAX || opts->counter < LP_OV_COUNTER_MIN)
+	if(ctx->counter > LP_COUNTER_MAX || ctx->counter < LP_COUNTER_MIN)
 		return LP_ERR_COUNTER;
 	
-	if((opts->flags & LP_CSF_ALL) == 0)
+	if((ctx->charsets & LP_CSF_ALL) == 0)
 		return LP_ERR_FLAGS;
 
-	
-	return lp_generate(site, login, secret, opts, pass, passlen);
+	return LP_generate(ctx, site, login, secret, pass, passlen);
 }
