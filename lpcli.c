@@ -11,6 +11,35 @@
 
 #include "lp.h"
 
+#ifndef EXIT_FAILURE
+#define EXIT_FAILURE 1
+#endif
+#define LP_FAIL EXIT_FAILURE
+
+#ifndef EXIT_SUCCESS
+#define EXIT_SUCCESS 0
+#endif
+#define LP_OK EXIT_SUCCESS
+
+
+#define ERRORS \
+	X(none, "Not an error") \
+	X(unrecognized_options, "Unrecognized or incorrect options used") \
+	X(cannot_set_to, "Cannot set %s value to %i") \
+	X(clipboard, "Cannot copy to clipboard") \
+	X(read_password, "Failed to read the password") \
+	X(inc_exc ,"Character set inclusion and exclusion options cannot be used together") \
+
+
+#define X(A, B) ERR_##A,
+enum ErrorCodes { ERRORS };
+#undef X
+
+#define X(A, B) B "\n",
+static const char *errstr[] = { ERRORS };
+#undef X
+
+
 void print_usage(void)
 {
 	fprintf(stderr,
@@ -44,13 +73,29 @@ int print_error(const char * format, ...)
 	va_end (args);
 	fflush(stderr);
 	
-	return 1;
+	return LP_FAIL;
 }
 
+typedef struct parsed_args
+{
+	const char *site;
+	const char *login;
+	const char *password;
+	unsigned charset_in;
+	unsigned charset_ex;
+	unsigned charset;
+	int length;
+	int counter;
+	unsigned changed;
+} OPTIONS;
 
-const char *site, *login, *password;
-unsigned charset_in = 0, charset_ex = LP_CSF_ALL;
-unsigned length = 0, counter = 0;
+
+static const OPTIONS default_opts =
+{
+	.site = NULL, .login = NULL, .password = NULL,
+	.charset_in = 0, .charset_ex=LP_CSF_DEF, .charset = 0,
+	.length = 0, .counter = 0, .changed = 0,
+};
 
 enum
 {
@@ -60,29 +105,29 @@ enum
 	CMDLINE_COUNTER   = 0x08,
 	CMDLINE_PASSWORD  = 0x10,
 	CMDLINE_CLIPBOARD = 0x20
-};
+}; //changed flags
 
-unsigned changes = 0;
-#define OPTSET(X) (changes |= CMDLINE_##X)
+#define TOUCH(X, Y) (X->changed |= CMDLINE_##Y)
 
-int read_args(int argc, const char **argv)
+
+int read_args(int argc, const char **argv, OPTIONS *opts)
 {
 	if(argc < 3)
-		return 1;
+		return LP_FAIL;
 	int i = 0;
 	const char *ptr;
 	char *ptrEnd;
 	ptr = argv[++i];
-	site = ptr;
+	opts->site = ptr;
 	ptr = argv[++i];
-	login = ptr;
+	opts->login = ptr;
 	
 	ptr = argv[++i];
 	
 	if(ptr && *ptr != '-')
 	{
-		password = ptr;
-		OPTSET(PASSWORD);
+		opts->password = ptr;
+		TOUCH(opts, PASSWORD);
 		ptr = argv[++i];
 	}
 	
@@ -93,7 +138,7 @@ int read_args(int argc, const char **argv)
 		if(!opt_open)
 		{
 			if(*ptr != '-')
-				return 1;
+				return LP_FAIL;
 			ptr++;
 		}
 		
@@ -102,62 +147,62 @@ int read_args(int argc, const char **argv)
 			case '\0': // -
 				if(!opt_open)
 				{
-					return 1;
+					return LP_FAIL;
 				}
 				opt_open = 0;
 				ptr = argv[++i];
 				break;
 			case '-': // --
 				if(opt_open)
-					return 1;
+					return LP_FAIL;
 				ptr++;
 				if(strcmp(ptr, "no-lowercase") == 0)
 				{
-					charset_ex &= ~ LP_CSF_LOWERCASE;
-					OPTSET(CSETEXC);
+					opts->charset_ex &= ~ LP_CSF_LOWERCASE;
+					TOUCH(opts, CSETEXC);
 				}
 				else if(strcmp(ptr, "no-uppercase") == 0)
 				{
-					charset_ex &= ~ LP_CSF_UPPERCASE;
-					OPTSET(CSETEXC);
+					opts->charset_ex &= ~ LP_CSF_UPPERCASE;
+					TOUCH(opts, CSETEXC);
 				}
 				else if(strcmp(ptr, "no-digits") == 0)
 				{
-					charset_ex &= ~ LP_CSF_DIGITS;
-					OPTSET(CSETEXC);
+					opts->charset_ex &= ~ LP_CSF_DIGITS;
+					TOUCH(opts, CSETEXC);
 				}
 				else if(strcmp(ptr, "no-symbols") == 0)
 				{
-					charset_ex &= ~ LP_CSF_SYMBOLS;
-					OPTSET(CSETEXC);
+					opts->charset_ex &= ~ LP_CSF_SYMBOLS;
+					TOUCH(opts, CSETEXC);
 				}
 				else if(strcmp(ptr, "clipboard") == 0)
 				{
-					OPTSET(CLIPBOARD);
+					TOUCH(opts, CLIPBOARD);
 				}
 				else if(strcmp(ptr, "length") == 0)
 				{
 					ptr = argv[++i];
 					if(ptr == NULL)
-						return 1;
-					length = strtol(ptr, &ptrEnd, 10);
+						return LP_FAIL;
+					opts->length = strtol(ptr, &ptrEnd, 10);
 					if(*ptrEnd != '\0')
-						return 1;
-					OPTSET(LENGTH);
+						return LP_FAIL;
+					TOUCH(opts, LENGTH);
 				}
 				else if(strcmp(ptr, "counter") == 0)
 				{
 					ptr = argv[++i];
 					if(ptr == NULL)
-						return 1;
-					counter = strtol(ptr, &ptrEnd, 10);
+						return LP_FAIL;
+					opts->counter = strtol(ptr, &ptrEnd, 10);
 					if(*ptrEnd != '\0')
-						return 1;
-					OPTSET(COUNTER);
+						return LP_FAIL;
+					TOUCH(opts, COUNTER);
 				}
 				else
 				{
-					return 1;
+					return LP_FAIL;
 				}
 				ptr = argv[++i];
 				break;
@@ -167,12 +212,12 @@ int read_args(int argc, const char **argv)
 				{
 					ptr = argv[++i];
 					if(ptr == NULL)
-						return 1;
+						return LP_FAIL;
 				}
-				length = strtol(ptr, &ptrEnd, 10);
+				opts->length = strtol(ptr, &ptrEnd, 10);
 				//if(*ptrEnd != '\0')
 				//	return 1;
-				OPTSET(LENGTH);
+				TOUCH(opts, LENGTH);
 				ptr = (const char*) ptrEnd;  opt_open = 1;
 				//ptr = argv[++i];
 				//opt_open = 0;
@@ -183,68 +228,67 @@ int read_args(int argc, const char **argv)
 				{
 					ptr = argv[++i];
 					if(ptr == NULL)
-						return 1;
+						return LP_FAIL;
 				}
-				counter = strtol(ptr, &ptrEnd, 10);
+				opts->counter = strtol(ptr, &ptrEnd, 10);
 				//if(*ptrEnd != '\0')
 				//	return 1;
-				OPTSET(COUNTER);
+				TOUCH(opts, COUNTER);
 				ptr = (const char*) ptrEnd; opt_open = 1;
 				//ptr = argv[++i];
 				//opt_open = 0;
 				break;
 			case 'l':
-				charset_in |= LP_CSF_LOWERCASE;
-				OPTSET(CSETINC);
+				opts->charset_in |= LP_CSF_LOWERCASE;
+				TOUCH(opts, CSETINC);
 				ptr++;
 				opt_open = 1;
 				break;
 			case 'u':
-				charset_in |= LP_CSF_UPPERCASE;
-				OPTSET(CSETINC);
+				opts->charset_in |= LP_CSF_UPPERCASE;
+				TOUCH(opts, CSETINC);
 				ptr++;
 				opt_open = 1;
 				break;
 			case 'd':
-				charset_in |= LP_CSF_DIGITS;
-				OPTSET(CSETINC);
+				opts->charset_in |= LP_CSF_DIGITS;
+				TOUCH(opts, CSETINC);
 				ptr++;
 				opt_open = 1;
 				break;
 			case 's':
-				charset_in |= LP_CSF_SYMBOLS;
-				OPTSET(CSETINC);
+				opts->charset_in |= LP_CSF_SYMBOLS;
+				TOUCH(opts, CSETINC);
 				ptr++;
 				opt_open = 1;
 				break;
 			case 'C':
-				OPTSET(CLIPBOARD);
+				TOUCH(opts, CLIPBOARD);
 				ptr++;
 				opt_open = 1;
 				break;
 			default:
-				return 1;
+				return LP_FAIL;
 		}
 	}
-	return 0;
+	return LP_OK;
 }
 #undef TOUCH
 
 
 //FILE *popen(const char *command, const char *type);
 //int pclose(FILE *stream);
-void copy_to_clipboard(const char *text)
+int copy_to_clipboard(const char *text)
 {
 	FILE *pout = popen("xclip -selection clipboard -quiet -loop 1", "w");
 	if(!pout)
 	{
-		fprintf(stderr, "Cannot copy to clipboard\n");
-		fflush(stderr);
-		return;
+		return LP_FAIL;
 	}
 	fprintf(pout, text);
 	fflush(pout);
 	pclose(pout);
+	return LP_OK;
 }
 
 int read_password(const char *prompt, char *out, size_t outl)
@@ -260,128 +304,131 @@ int read_password(const char *prompt, char *out, size_t outl)
 	out = fgets(out, outl, stdin);
 	tcsetattr(0, TCSANOW, &told);
 	
-	if(out)
-	{
-		out[strcspn(out, "\r\n")] = 0;
-		return 0;
-	}
-	return 1;
+	if(!out)
+		return LP_FAIL;
+
+	out[strcspn(out, "\r\n")] = 0;
+	return LP_OK;
 }
 
-#define ISOPTSET(X) (changes & CMDLINE_##X)
+#define ISOPTSET(X) (options.changed & CMDLINE_##X)
 
-void print_options(unsigned cs, unsigned ct, unsigned l)
+void print_options(OPTIONS *t)
 {
 	printf("Options: -");
-	if(cs & LP_CSF_LOWERCASE)
-		printf("u");
-	if(cs & LP_CSF_UPPERCASE)
+	if(t->charset & LP_CSF_LOWERCASE)
 		printf("l");
-	if(cs & LP_CSF_DIGITS)
+	if(t->charset & LP_CSF_UPPERCASE)
+		printf("u");
+	if(t->charset & LP_CSF_DIGITS)
 		printf("d");
-	if(cs & LP_CSF_SYMBOLS)
+	if(t->charset & LP_CSF_SYMBOLS)
 		printf("s");
-	printf("c%u", ct);
-	printf("L%u", l);
+	printf("c%u", t->counter);
+	printf("L%u", t->length);
 	printf("\n");
 }
 
 int main(int argc, const char **argv)
 {
-	int ret = read_args(argc, argv);
-	if(ret)
+	OPTIONS options = default_opts;
+	if(read_args(argc, argv, &options) != LP_OK)
 	{
-		return print_error("Unknown options specified\n");
+		return print_error(errstr[ERR_unrecognized_options]);
 	}
 	
 	unsigned temp;
 	if(ISOPTSET(CSETINC) && ISOPTSET(CSETEXC))
 	{
-		return print_error("Exclusion options cannot be used with inclusion options\n");
+		return print_error(errstr[ERR_inc_exc]);
 	}
 
 	LP_CTX *ctx = LP_CTX_new();
 	
-	unsigned charset;
-	if(ISOPTSET(CSETINC))
+	if(ISOPTSET(CSETINC)) // this should never happen
 	{
-		temp = LP_set_charsets(ctx, charset_in);
-		if(temp != charset_in)
+		temp = LP_set_charsets(ctx, options.charset_in);
+		if(temp != options.charset_in)
 		{
 			LP_CTX_free(ctx);
-			return print_error("Cannot set invalid charset value %u\n", charset_in);
+			return print_error(errstr[ERR_cannot_set_to], "inclusive charset flags", options.charset_in);
 		}
-		charset = charset_in;
+		options.charset = options.charset_in;
 	}
 	else if(ISOPTSET(CSETEXC))
 	{
-		temp = LP_set_charsets(ctx, charset_ex);
-		if(temp != charset_ex)
+		temp = LP_set_charsets(ctx, options.charset_ex);
+		if(temp != options.charset_ex)
 		{
 			LP_CTX_free(ctx);
-			return print_error("Cannot set invalid charset value %u\n", charset_ex);
+			return print_error(errstr[ERR_cannot_set_to], "exclusive charset flags", options.charset_ex);
 		}
-		charset = charset_ex;
+		options.charset = options.charset_ex;
 	}
 	else
 	{
-		charset = LP_set_charsets(ctx, 0);
+		options.charset = LP_set_charsets(ctx, 0);
 	}
 	
 	if(ISOPTSET(LENGTH))
 	{
-		temp = LP_set_length(ctx, length);
-		if(temp != length)
+		temp = LP_set_length(ctx, options.length);
+		if(temp != (unsigned) options.length)
 		{
 			LP_CTX_free(ctx);
-			return print_error("Cannot set invalid length value %u\n", length);
+			return print_error(errstr[ERR_cannot_set_to], "length", options.length);
 		}
 	}
 	else
 	{
-		length = LP_set_length(ctx, 0);
+		options.length = LP_set_length(ctx, 0);
 	}
 	
 	if(ISOPTSET(COUNTER))
 	{
-		temp = LP_set_counter(ctx, counter);
-		if(temp != counter)
+		temp = LP_set_counter(ctx, options.counter);
+		if(temp != (unsigned) options.counter)
 		{
 			LP_CTX_free(ctx);
-			return print_error("Cannot set invalid counter value %u\n", counter);
+			return print_error(errstr[ERR_cannot_set_to], "counter", options.counter);
 		}
 	}
 	else
 	{
-		counter = LP_set_counter(ctx, 0);
+		options.counter = LP_set_counter(ctx, 0);
 	}
 	
-	char genpass[length + 1];
-	genpass[length] = 0;
+	char genpass[options.length + 1];
+	genpass[options.length] = 0;
 	
-	print_options(charset, counter, length);
+	print_options(&options);
 	
 	if(!ISOPTSET(PASSWORD))
 	{
 
 		char passwd_in[1024];
-		if(read_password("Password: ", passwd_in, sizeof passwd_in))
+		if(read_password("Password: ", passwd_in, sizeof passwd_in) != LP_OK)
 		{
 			LP_CTX_free(ctx);
-			return print_error("Cannot read password\n");
+			return print_error(errstr[ERR_read_password]);
 		}
-		LP_get_pass(ctx, site, login, (const char *) passwd_in, genpass, sizeof genpass);
+		LP_get_pass(ctx, options.site, options.login, (const char *) passwd_in, genpass, sizeof genpass);
+		memset(passwd_in, 0, sizeof passwd_in);
 	}
 	else
 	{
-		LP_get_pass(ctx, site, login, password, genpass, sizeof genpass);
+		LP_get_pass(ctx, options.site, options.login, options.password, genpass, sizeof genpass);
 	}
+	
+	int do_copy = ISOPTSET(CLIPBOARD);
+	memset(&options, 0, sizeof options);
 	
 	LP_CTX_free(ctx);
 	
-	if(ISOPTSET(CLIPBOARD))
+	if(do_copy)
 	{
-		copy_to_clipboard(genpass);
+		if(copy_to_clipboard(genpass) != LP_OK)
+			return print_error(errstr[ERR_clipboard]);
 	}
 	else
 	{
@@ -389,5 +436,5 @@ int main(int argc, const char **argv)
 	}
 	
 	
-	return 0;
+	return EXIT_SUCCESS;
 }
