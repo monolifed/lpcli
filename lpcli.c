@@ -3,6 +3,9 @@
 	#define _XOPEN_SOURCE
 	#endif
 	#include <termios.h>
+#else
+	#include <windows.h>
+	#include <conio.h>
 #endif
 #include <stdio.h>
 #include <stdarg.h>
@@ -280,6 +283,7 @@ int read_args(int argc, const char **argv, OPTIONS *opts)
 //int pclose(FILE *stream);
 int copy_to_clipboard(const char *text)
 {
+#ifndef _WIN32
 	FILE *pout = popen("xclip -selection clipboard -quiet -loop 1", "w");
 	if(!pout)
 	{
@@ -288,12 +292,26 @@ int copy_to_clipboard(const char *text)
 	fprintf(pout, text);
 	fflush(pout);
 	pclose(pout);
+#else
+	const size_t len = strlen(text) + 1;
+	HGLOBAL hMem =  GlobalAlloc(GMEM_MOVEABLE, len);
+	memcpy(GlobalLock(hMem), text, len);
+	GlobalUnlock(hMem);
+	OpenClipboard(0);
+	EmptyClipboard();
+	if(!SetClipboardData(CF_TEXT, hMem))
+	{
+		return LP_FAIL;
+	}
+	CloseClipboard();
+#endif
 	return LP_OK;
 }
 
 int read_password(const char *prompt, char *out, size_t outl)
 {
 	printf(prompt);
+#ifndef _WIN32
 	static struct termios told, tnew;
 	tcgetattr(0, &told);
 	tnew = told;
@@ -308,6 +326,21 @@ int read_password(const char *prompt, char *out, size_t outl)
 		return LP_FAIL;
 
 	out[strcspn(out, "\r\n")] = 0;
+#else
+	char c;
+	size_t i;
+	for(i=0; i < outl - 1; i++)
+	{
+		c = getch();
+		if(c == '\r')
+		{
+			printf("\n");
+			break;
+		}
+		out[i] = c;
+	}
+	out[i] = '\0';
+#endif
 	return LP_OK;
 }
 
@@ -401,7 +434,7 @@ int main(int argc, const char **argv)
 	char genpass[options.length + 1];
 	genpass[options.length] = 0;
 	
-	print_options(&options);
+	//print_options(&options);
 	
 	if(!ISOPTSET(PASSWORD))
 	{
