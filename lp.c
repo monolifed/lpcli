@@ -1,4 +1,4 @@
-#include <openssl/evp.h>
+#include "lp_crypto.h"
 
 #include "lp.h"
 
@@ -253,7 +253,7 @@ int LP_generate( LP_CTX *ctx, const char* site,  const char* login, const char* 
 
 LP_CTX* LP_CTX_new(void)
 {
-	LP_CTX *lpctx = malloc(sizeof(LP_CTX));
+	LP_CTX *lpctx = CRYPTO_malloc(sizeof(LP_CTX), __FILE__, __LINE__);
 	lpctx->version = LP_VERSION;
 	lpctx->keylen = LP_KEYLEN;
 	lpctx->iterations = LP_ITERS;
@@ -267,7 +267,7 @@ LP_CTX* LP_CTX_new(void)
 
 void LP_CTX_free(LP_CTX *ctx)
 {
-	free(ctx);
+	CRYPTO_free(ctx, __FILE__, __LINE__);
 }
 
 unsigned LP_set_counter(LP_CTX *ctx, unsigned counter)
