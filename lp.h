@@ -5,14 +5,13 @@
 
 typedef enum
 {
-	LP_CSF_LOWERCASE    = 0x01, //L
-	LP_CSF_UPPERCASE    = 0x02, //U
-	LP_CSF_DIGITS       = 0x04, //D
-	LP_CSF_SYMBOLS      = 0x08, //S
-	LP_CSF_LETTERS      = 0x03, //L|U
-	LP_CSF_ALPHANUMERIC = 0x07, //L|U|D
-	LP_CSF_ALL          = 0x0F  //L|U|D|S
+	LP_CSF_L = (1 << 0), // Lowecase  : 0001
+	LP_CSF_U = (1 << 1), // Uppercase : 0010
+	LP_CSF_D = (1 << 2), // Digits    : 0100
+	LP_CSF_S = (1 << 3), // Symbols   : 1000
 } lp_csflag;
+
+#define LP_CSF_ALL ((1 << 4) - 1)  // All flags set: 1111
 
 
 typedef enum
@@ -35,6 +34,7 @@ typedef enum
 	LP_ERR_SECRET  = -7, // secret too long  (>LPMAXSTRLEN)
 	LP_ERR_DIGEST  = -8, // digest is not sha256 (internal)
 	LP_ERR_FLAGS   = -9, // no charsets flags selected
+	LP_ERR_INIT    = -10,// not initialized
 	
 } lp_error;
 

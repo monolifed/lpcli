@@ -41,6 +41,7 @@
 	#include <stddef.h>
 	void *CRYPTO_malloc(size_t num, const char *file, int line);
 	void CRYPTO_free(void *str, const char *file, int line);
+	void OPENSSL_cleanse(void *ptr, size_t len);
 	
 #endif //HAS_OSSL_DEV
 

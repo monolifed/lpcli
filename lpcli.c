@@ -161,22 +161,22 @@ int read_args(int argc, const char **argv, OPTIONS *opts)
 				ptr++;
 				if(strcmp(ptr, "no-lowercase") == 0)
 				{
-					opts->charset_ex &= ~ LP_CSF_LOWERCASE;
+					opts->charset_ex &= ~ LP_CSF_L;
 					TOUCH(opts, CSETEXC);
 				}
 				else if(strcmp(ptr, "no-uppercase") == 0)
 				{
-					opts->charset_ex &= ~ LP_CSF_UPPERCASE;
+					opts->charset_ex &= ~ LP_CSF_U;
 					TOUCH(opts, CSETEXC);
 				}
 				else if(strcmp(ptr, "no-digits") == 0)
 				{
-					opts->charset_ex &= ~ LP_CSF_DIGITS;
+					opts->charset_ex &= ~ LP_CSF_D;
 					TOUCH(opts, CSETEXC);
 				}
 				else if(strcmp(ptr, "no-symbols") == 0)
 				{
-					opts->charset_ex &= ~ LP_CSF_SYMBOLS;
+					opts->charset_ex &= ~ LP_CSF_S;
 					TOUCH(opts, CSETEXC);
 				}
 				else if(strcmp(ptr, "clipboard") == 0)
@@ -242,25 +242,25 @@ int read_args(int argc, const char **argv, OPTIONS *opts)
 				//opt_open = 0;
 				break;
 			case 'l':
-				opts->charset_in |= LP_CSF_LOWERCASE;
+				opts->charset_in |= LP_CSF_L;
 				TOUCH(opts, CSETINC);
 				ptr++;
 				opt_open = 1;
 				break;
 			case 'u':
-				opts->charset_in |= LP_CSF_UPPERCASE;
+				opts->charset_in |= LP_CSF_U;
 				TOUCH(opts, CSETINC);
 				ptr++;
 				opt_open = 1;
 				break;
 			case 'd':
-				opts->charset_in |= LP_CSF_DIGITS;
+				opts->charset_in |= LP_CSF_D;
 				TOUCH(opts, CSETINC);
 				ptr++;
 				opt_open = 1;
 				break;
 			case 's':
-				opts->charset_in |= LP_CSF_SYMBOLS;
+				opts->charset_in |= LP_CSF_S;
 				TOUCH(opts, CSETINC);
 				ptr++;
 				opt_open = 1;
@@ -349,13 +349,13 @@ int read_password(const char *prompt, char *out, size_t outl)
 void print_options(OPTIONS *t)
 {
 	printf("Options: -");
-	if(t->charset & LP_CSF_LOWERCASE)
+	if(t->charset & LP_CSF_L)
 		printf("l");
-	if(t->charset & LP_CSF_UPPERCASE)
+	if(t->charset & LP_CSF_U)
 		printf("u");
-	if(t->charset & LP_CSF_DIGITS)
+	if(t->charset & LP_CSF_D)
 		printf("d");
-	if(t->charset & LP_CSF_SYMBOLS)
+	if(t->charset & LP_CSF_S)
 		printf("s");
 	printf("c%u", t->counter);
 	printf("L%u", t->length);
@@ -446,7 +446,7 @@ int main(int argc, const char **argv)
 			return print_error(errstr[ERR_read_password]);
 		}
 		LP_get_pass(ctx, options.site, options.login, (const char *) passwd_in, genpass, sizeof genpass);
-		memset(passwd_in, 0, sizeof passwd_in);
+		//mymemset(passwd_in, 0, sizeof passwd_in);
 	}
 	else
 	{
@@ -454,7 +454,7 @@ int main(int argc, const char **argv)
 	}
 	
 	int do_copy = ISOPTSET(CLIPBOARD);
-	memset(&options, 0, sizeof options);
+	//mymemset(&options, 0, sizeof options);
 	
 	LP_CTX_free(ctx);
 	
@@ -468,6 +468,6 @@ int main(int argc, const char **argv)
 		printf("%s\n", genpass);
 	}
 	
-	
+	//mymemset(&genpass, 0, sizeof genpass);
 	return EXIT_SUCCESS;
 }
