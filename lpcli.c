@@ -11,6 +11,7 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
+//#include <locale.h>
 
 #include "lp.h"
 
@@ -364,6 +365,7 @@ void print_options(OPTIONS *t)
 
 int main(int argc, const char **argv)
 {
+	//setlocale(LC_CTYPE, "en.UTF-8");
 	OPTIONS options = default_opts;
 	if(read_args(argc, argv, &options) != LP_OK)
 	{
@@ -445,6 +447,7 @@ int main(int argc, const char **argv)
 			LP_CTX_free(ctx);
 			return print_error(errstr[ERR_read_password]);
 		}
+		printf("\n");
 		LP_get_pass(ctx, options.site, options.login, (const char *) passwd_in, genpass, sizeof genpass);
 		//mymemset(passwd_in, 0, sizeof passwd_in);
 	}

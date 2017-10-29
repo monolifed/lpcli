@@ -1,51 +1,37 @@
 #include "lp_crypto.h"
-
 #include "lp.h"
 
-typedef enum
-{
-	LP_MD_MD5    = 0,
-	LP_MD_SHA1   = 1,
-	LP_MD_SHA224 = 2,
-	LP_MD_SHA256 = 3, // only valid value for v2
-	LP_MD_SHA384 = 4,
-	LP_MD_SHA512 = 5,
+typedef const EVP_MD* (*evpmd_f)(void);
+#define DIGEST_ID(A) LP_MD_##A
 
-} lp_digest;
+#define DIGEST_LIST \
+	X(md5), X(sha1), X(sha224), \
+	X(sha256), X(sha384), X(sha512) \
 
+#define X(A) DIGEST_ID(A)
+enum { DIGEST_LIST };
+#undef X
+
+#define X(A) EVP_##A
+static const evpmd_f mdlist[] = { DIGEST_LIST };
+#undef X
+
+#undef DIGEST_LIST
+//static const unsigned mdlistsize = sizeof(mdlist)/sizeof(mdlist[0]);
 
 typedef enum
 {
 	LP_VER_DEF    = 2,
 	LP_KEYLEN_DEF = 32,
 	LP_ITERS_DEF  = 100000,
-	LP_DIGEST_DEF = LP_MD_SHA256
+	LP_DIGEST_DEF = DIGEST_ID(sha256)
 } lp_defaults;
 
-typedef const EVP_MD* (*evpmd_f)(void);
-
-typedef struct evpmd_s
-{
-	int id;
-	evpmd_f md;
-} evpmd_t;
-
-static const evpmd_t mdlist[] =
-{
-	{LP_MD_MD5   , EVP_md5   },
-	{LP_MD_SHA1  , EVP_sha1  },
-	{LP_MD_SHA224, EVP_sha224},
-	{LP_MD_SHA256, EVP_sha256},
-	{LP_MD_SHA384, EVP_sha384},
-	{LP_MD_SHA512, EVP_sha512},
-};
-static const unsigned mdlistsize = sizeof(mdlist)/sizeof(mdlist[0]);
-
-// Start Autogen Charsets
+// Start Autogen Charsets (indexed by flag)
 typedef struct charset_s
 {
-	const char *set;
-	unsigned setlen; // set length
+	const char *value;
+	unsigned length; // set length
 	unsigned numsets; // number of sets used
 } charset_t;
 
@@ -82,7 +68,7 @@ struct lp_ctx_st
 	unsigned version;
 	unsigned keylen;
 	unsigned iterations;
-	int digest;
+	unsigned digest;
 
 	unsigned counter;
 	unsigned length;
@@ -116,14 +102,21 @@ static int consumeEntropyInt(LP_CTX *ctx, int setlen)
 	return longdivEntropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx);
 }
 
-static unsigned mystrnlen(const char *s)
+static unsigned mystrnlen(const char *s, unsigned max)
 {
 	if(!s || !*s)
 		return 0;
 	unsigned i;
-	for(i = 0; (i < LPMAXSTRLEN) && s[i]; i++);
+	for(i = 0; (i < max) && s[i]; i++);
 	return i;
 }
+
+/*
+static unsigned mystrlen(const char *s)
+{
+	return mystrnlen(s, LPMAXSTRLEN);
+}
+*/
 
 static unsigned myhexlen(unsigned u)
 {
@@ -158,12 +151,12 @@ static void mymemcpy(char *dst, const char *src, unsigned count)
 static void mypushchar(char *dst, unsigned len, unsigned pos, char c)
 {
 	/* Alt. method
-	for(i = len; i > pos; count--)
+	for(i = len - 1; i > pos; i--)
 	{
 		dst[i] = dst[i - 1];
 	}
 	*/
-	mymemcpy(dst + pos + 1, dst + pos, len - pos);
+	mymemcpy(dst + pos + 1, dst + pos, len - pos - 1);
 	dst[pos] = c;
 }
 
@@ -181,80 +174,67 @@ static void mymemzero(void *dst, size_t len)
 }
 */
 
-static int LP_generate(LP_CTX *ctx, const char* site,  const char* login, const char* secret, char* pass, unsigned passlen)
+// (const) string
+typedef struct lp_str_s
 {
-	if((ctx->charsets & LP_CSF_ALL) == 0 || ctx->length == 0 || passlen == 0)
+	const char *value;
+	unsigned length;
+} LP_STR;
+
+// variable string
+typedef struct lp_vstr_s
+{
+	char *value;
+	unsigned length;
+} LP_VSTR;
+
+static int LP_generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const LP_STR *secret, LP_VSTR *pass)
+{
+	if(pass->length == 0)
 		return 0;
 	
-	if(mystrnlen(site) + mystrnlen(login) + myhexlen(ctx->counter) > LPMAXSTRLEN)
-		return LP_ERR_SALTLEN;
+	unsigned len = myhexlen(ctx->counter);
+	unsigned saltlen = site->length + login->length + len;
+	char buffer[saltlen > ctx->length ? saltlen : ctx->length];
+	char *p = buffer;
 	
-	if(mystrnlen(secret) > LPMAXSTRLEN)
-		return LP_ERR_SECRET;
+	// Create salt string in buffer: site|login|hex(counter) 
+	mymemcpy(p, site->value, site->length);
+	p += site->length;
+	mymemcpy(p, login->value, login->length);
+	p += login->length;
+	mysprinthex(p, len, ctx->counter);
 	
-	evpmd_f md = NULL;
-	unsigned i;
-	for(i = 0; i < mdlistsize; i++)
-	{
-		if(ctx->digest == mdlist[i].id)
-		{
-			md = mdlist[i].md;
-			break;
-		}
-	}
-	if(md == NULL)
-		return LP_ERR_DIGEST;
-	
-	unsigned saltlen = 0;
-	char outbuf[LPMAXSTRLEN];
-	
-	unsigned len = 0;
-	
-	
-	len = mystrnlen(site);
-	mymemcpy(outbuf, site, len);
-	saltlen += len;
-	
-	len = mystrnlen(login);
-	mymemcpy(outbuf + saltlen, login, len);
-	saltlen += len;
-	
-	len = myhexlen(ctx->counter);
-	mysprinthex(outbuf + saltlen, len, ctx->counter);
-	saltlen += len;
-	
-	
-	len = mystrnlen(secret);
-	
+	// Create entropy number from PBKDF2
 	unsigned char keybuf[ctx->keylen];
-	PKCS5_PBKDF2_HMAC(secret, len, (unsigned char *)outbuf, saltlen, ctx->iterations, md(), sizeof keybuf, keybuf);
-	
+	PKCS5_PBKDF2_HMAC(secret->value, secret->length, (unsigned char *)buffer, saltlen, ctx->iterations, mdlist[ctx->digest](), sizeof keybuf, keybuf);
 	BN_bin2bn(keybuf, sizeof keybuf, ctx->entropy);
 	OPENSSL_cleanse(keybuf, sizeof keybuf);
+	
+	// Select len (= length - numsets) characters from the merged charset
 	const charset_t *charset = &cslist[ctx->charsets & LP_CSF_ALL];
 	len = ctx->length - charset->numsets;
-	consumeEntropy(ctx, outbuf, len, charset->set, charset->setlen);
+	consumeEntropy(ctx, buffer, len, charset->value, charset->length);
 	
-	char toadd[charset->numsets];
-	char *p = toadd;
+	// Select numsets characters (one from each subset of charset)
+	p = buffer + len;
+	unsigned i;
 	for(i = 1; i < cslistsize; i <<= 1)
 	{
 		if(ctx->charsets & i)
 		{
-			*p++ = cslist[i].set[consumeEntropyInt(ctx, cslist[i].setlen)];
+			*p++ = cslist[i].value[consumeEntropyInt(ctx, cslist[i].length)];
 		}
 	}
 
-	int sep = 0;
-	for(i = 0; i < charset->numsets; i++)
+	// Combine last numsets characters into the first len characters
+	for(; len < ctx->length; len++)
 	{
-		sep = consumeEntropyInt(ctx, len);
-		mypushchar(outbuf, len, sep, toadd[i]);
-		len++;
+		mypushchar(buffer, len + 1, consumeEntropyInt(ctx, len), buffer[len]);
 	}
 
-	mymemcpy(pass, outbuf, passlen > len ? len : passlen);
-	OPENSSL_cleanse(outbuf, sizeof outbuf);
+	mymemcpy(pass->value, buffer, pass->length > len ? len : pass->length);
+	OPENSSL_cleanse(buffer, sizeof buffer);
 	return len;
 }
 
@@ -316,8 +296,18 @@ unsigned LP_set_charsets(LP_CTX *ctx, unsigned charsets)
 	return ctx->charsets;
 }
 
+
 int LP_get_pass(LP_CTX *ctx, const char* site,  const char* login, const char* secret, char* pass, unsigned passlen)
 {
+	if(site == NULL)
+		return LP_ERR_NULL_SITE;
+	if(login == NULL)
+		return LP_ERR_NULL_LOGIN;
+	if(secret == NULL)
+		return LP_ERR_NULL_SECRET;
+	if(pass == NULL)
+		return LP_ERR_NULL_PASS;
+	
 	if(ctx == NULL)
 		return LP_ERR_INIT;
 	if(ctx->version != LP_VER_DEF)
@@ -328,15 +318,35 @@ int LP_get_pass(LP_CTX *ctx, const char* site,  const char* login, const char* s
 		return LP_ERR_ITER;
 	if(ctx->digest != LP_DIGEST_DEF)
 		return LP_ERR_DIGEST;
+	//if(ctx->digest >= mdlistsize)
+	//{
+	//	return LP_ERR_DIGEST;
+	//}
 	
 	if(ctx->length > LP_LENGTH_MAX || ctx->length < LP_LENGTH_MIN)
-		return LP_ERR_PASSLEN;
-
+		return LP_ERR_LENGTH;
 	if(ctx->counter > LP_COUNTER_MAX || ctx->counter < LP_COUNTER_MIN)
 		return LP_ERR_COUNTER;
-	
 	if((ctx->charsets & LP_CSF_ALL) == 0)
 		return LP_ERR_FLAGS;
 
-	return LP_generate(ctx, site, login, secret, pass, passlen);
+	unsigned len;
+	len = mystrnlen(site, LPMAXSTRLEN);
+	if(len >= LPMAXSTRLEN)
+		return LP_ERR_LONG_SITE;
+	LP_STR site_str = {.value = site, .length = len};
+	
+	len = mystrnlen(login, LPMAXSTRLEN);
+	if(len >= LPMAXSTRLEN)
+		return LP_ERR_LONG_LOGIN;
+	LP_STR login_str = {.value = login, .length = len};
+	
+	len = mystrnlen(secret, LPMAXSTRLEN);
+	if(len >= LPMAXSTRLEN)
+		return LP_ERR_LONG_SECRET;
+	LP_STR secret_str = {.value = secret, .length = len};
+	
+	LP_VSTR pass_str = {.value = pass, .length = passlen};
+	
+	return LP_generate(ctx, &site_str, &login_str, &secret_str, &pass_str);
 }

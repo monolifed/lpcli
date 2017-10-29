@@ -49,7 +49,7 @@ int main(void)
 	int start = 0;
 	int end = (1 << setsize) - 1;
 
-	printf("typedef struct charset_s\n{\n\tconst char *set;\n\tunsigned setlen; // set length\n" \
+	printf("typedef struct charset_s\n{\n\tconst char *value;\n\tunsigned length; // set length\n" \
 		"\tunsigned numsets; // number of sets used\n} charset_t;\n\n");
 	printf("static const charset_t cslist[] = \n{\n");
 	for(i = start; i <= end; i++)

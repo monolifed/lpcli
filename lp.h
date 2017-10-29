@@ -25,16 +25,20 @@ typedef struct lp_ctx_st LP_CTX;
 
 typedef enum
 {
-	LP_ERR_VERSION = -1, // version is not 2 (internal)
-	LP_ERR_KEYLEN  = -2, // keylen is not 32 (internal)
-	LP_ERR_PASSLEN = -3, // passlen out of range
-	LP_ERR_ITER    = -4, // iterations is not 100000 (internal)
-	LP_ERR_COUNTER = -5, // counter out of range
-	LP_ERR_SALTLEN = -6, // salt (site+login+counter) too long (>LPMAXSTRLEN)
-	LP_ERR_SECRET  = -7, // secret too long  (>LPMAXSTRLEN)
-	LP_ERR_DIGEST  = -8, // digest is not sha256 (internal)
-	LP_ERR_FLAGS   = -9, // no charsets flags selected
-	LP_ERR_INIT    = -10,// not initialized
+	LP_ERR_GENERIC = -64,
+	LP_ERR_VERSION, // version is not 2 (internal)
+	LP_ERR_KEYLEN,  // keylen is not 32 (internal)
+	LP_ERR_ITER,    // iterations is not 100000 (internal)
+	LP_ERR_DIGEST,  // digest is not sha256 (internal)
+
+	LP_ERR_LENGTH,  // passlen out of range
+	LP_ERR_COUNTER, // counter out of range
+	LP_ERR_FLAGS,   // no charsets flags selected
+	LP_ERR_INIT,    // LP_CTX is not initialized
+	LP_ERR_NULL_SITE, LP_ERR_LONG_SITE,     // (>=LPMAXSTRLEN)
+	LP_ERR_NULL_LOGIN, LP_ERR_LONG_LOGIN,   // (>=LPMAXSTRLEN)
+	LP_ERR_NULL_SECRET, LP_ERR_LONG_SECRET, // (>=LPMAXSTRLEN)
+	LP_ERR_NULL_PASS
 	
 } lp_error;
 
