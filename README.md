@@ -4,6 +4,9 @@ C implementation of lesspass (version 2) using openssl's crypto library.
 Command line options are similar to the official cli:
 https://github.com/lesspass/cli/
 
+# Caveat
+If your terminal encoding is not UTF-8 you might get different results than lesspass web for the same parameters.
+
 # Building
 Install openssl dev package and type "make -e USE_OSSL_DEV=1".
 
