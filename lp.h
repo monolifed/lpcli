@@ -1,7 +1,7 @@
 #ifndef LP_H
 #define LP_H
 
-#define LPMAXSTRLEN 1024
+#define LPMAXSTRLEN 2048
 
 typedef enum
 {

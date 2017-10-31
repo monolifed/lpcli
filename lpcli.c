@@ -11,9 +11,13 @@
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-//#include <locale.h>
+#include <locale.h>
 
 #include "lp.h"
+
+typedef void* (*lp_memset_f) (void*, int, size_t);
+static volatile lp_memset_f lp_memset = memset;
+void lp_zeromem(void *p, size_t s){ lp_memset(p, 0, s); }
 
 #ifndef EXIT_FAILURE
 #define EXIT_FAILURE 1
@@ -28,7 +32,7 @@
 
 #define ERRORS \
 	X(none, "Not an error") \
-	X(unrecognized_options, "Unrecognized or incorrect options used") \
+	X(unrecognized_options, "Unrecognized or incorrect options specified") \
 	X(cannot_set_to, "Cannot set %s value to %i") \
 	X(clipboard, "Cannot copy to clipboard") \
 	X(read_password, "Failed to read the password") \
@@ -43,11 +47,12 @@ enum ErrorCodes { ERRORS };
 static const char *errstr[] = { ERRORS };
 #undef X
 
+#undef ERRORS
 
-void print_usage(void)
+int print_usage(void)
 {
 	fprintf(stderr,
-	"Usage: lesspass <site> <login> [options] \n"
+	"Usage: lpcli <site> <login> [options] \n"
 	"Options: \n"
 	"  -l                  add lowercase in password \n"
 	"  -u                  add uppercase in password \n"
@@ -66,6 +71,7 @@ void print_usage(void)
 	"                      xclip (Linux) or clip (Windows) is required.\n"
 	);
 	fflush(stderr);
+	return LP_FAIL;
 }
 
 int print_error(const char * format, ...)
@@ -114,7 +120,7 @@ enum
 #define TOUCH(X, Y) (X->changed |= CMDLINE_##Y)
 
 
-int read_args(int argc, const char **argv, OPTIONS *opts)
+static int read_args(int argc, const char **argv, OPTIONS *opts)
 {
 	if(argc < 3)
 		return LP_FAIL;
@@ -282,7 +288,7 @@ int read_args(int argc, const char **argv, OPTIONS *opts)
 
 //FILE *popen(const char *command, const char *type);
 //int pclose(FILE *stream);
-int copy_to_clipboard(const char *text)
+static int copy_to_clipboard(const char *text)
 {
 #ifndef _WIN32
 	FILE *pout = popen("xclip -selection clipboard -quiet -loop 1", "w");
@@ -309,7 +315,7 @@ int copy_to_clipboard(const char *text)
 	return LP_OK;
 }
 
-int read_password(const char *prompt, char *out, size_t outl)
+static int read_password(const char *prompt, char *out, size_t outl)
 {
 	printf(prompt);
 #ifndef _WIN32
@@ -365,7 +371,11 @@ void print_options(OPTIONS *t)
 
 int main(int argc, const char **argv)
 {
-	//setlocale(LC_CTYPE, "en.UTF-8");
+	if(argc < 3)
+	{
+		return print_usage();
+	}
+	
 	OPTIONS options = default_opts;
 	if(read_args(argc, argv, &options) != LP_OK)
 	{
@@ -441,15 +451,15 @@ int main(int argc, const char **argv)
 	if(!ISOPTSET(PASSWORD))
 	{
 
-		char passwd_in[1024];
-		if(read_password("Password: ", passwd_in, sizeof passwd_in) != LP_OK)
+		char passwd_in[LPMAXSTRLEN];
+		if(read_password("Enter Password: ", passwd_in, sizeof passwd_in) != LP_OK)
 		{
 			LP_CTX_free(ctx);
 			return print_error(errstr[ERR_read_password]);
 		}
 		printf("\n");
 		LP_get_pass(ctx, options.site, options.login, (const char *) passwd_in, genpass, sizeof genpass);
-		//mymemset(passwd_in, 0, sizeof passwd_in);
+		lp_zeromem(passwd_in, sizeof passwd_in); // clean password read
 	}
 	else
 	{
@@ -457,7 +467,7 @@ int main(int argc, const char **argv)
 	}
 	
 	int do_copy = ISOPTSET(CLIPBOARD);
-	//mymemset(&options, 0, sizeof options);
+	lp_zeromem(&options, sizeof options); // clean options
 	
 	LP_CTX_free(ctx);
 	
@@ -471,6 +481,6 @@ int main(int argc, const char **argv)
 		printf("%s\n", genpass);
 	}
 	
-	//mymemset(&genpass, 0, sizeof genpass);
+	lp_zeromem(&genpass, sizeof genpass); // clean generated password
 	return EXIT_SUCCESS;
 }
