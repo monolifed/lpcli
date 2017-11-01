@@ -31,31 +31,32 @@ typedef enum
 typedef struct charset_s
 {
 	const char *value;
-	unsigned length; // set length
-	unsigned numsets; // number of sets used
+	unsigned char length; // set length
+	unsigned char numsets; // number of sets used
+	unsigned char lensets[4]; // lengths of sets used
 } charset_t;
 
 static const charset_t cslist[] = 
 {
-	{"", 0, 0},
-	{"abcdefghijklmnopqrstuvwxyz", 26, 1},
-	{"ABCDEFGHIJKLMNOPQRSTUVWXYZ", 26, 1},
-	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", 52, 2},
-	{"0123456789", 10, 1},
-	{"abcdefghijklmnopqrstuvwxyz0123456789", 36, 2},
-	{"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 36, 2},
-	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 62, 3},
-	{"!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 32, 1},
-	{"abcdefghijklmnopqrstuvwxyz!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 58, 2},
-	{"ABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 58, 2},
-	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 84, 3},
-	{"0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 42, 2},
-	{"abcdefghijklmnopqrstuvwxyz0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 68, 3},
-	{"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 68, 3},
-	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 94, 4},
+	{"", 0, 0, {0, 0, 0, 0}},
+	{"abcdefghijklmnopqrstuvwxyz", 26, 1, {26, 0, 0, 0}},
+	{"ABCDEFGHIJKLMNOPQRSTUVWXYZ", 26, 1, {26, 0, 0, 0}},
+	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ", 52, 2, {26, 26, 0, 0}},
+	{"0123456789", 10, 1, {10, 0, 0, 0}},
+	{"abcdefghijklmnopqrstuvwxyz0123456789", 36, 2, {26, 10, 0, 0}},
+	{"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 36, 2, {26, 10, 0, 0}},
+	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 62, 3, {26, 26, 10, 0}},
+	{"!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 32, 1, {32, 0, 0, 0}},
+	{"abcdefghijklmnopqrstuvwxyz!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 58, 2, {26, 32, 0, 0}},
+	{"ABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 58, 2, {26, 32, 0, 0}},
+	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 84, 3, {26, 26, 32, 0}},
+	{"0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 42, 2, {10, 32, 0, 0}},
+	{"abcdefghijklmnopqrstuvwxyz0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 68, 3, {26, 10, 32, 0}},
+	{"ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 68, 3, {26, 10, 32, 0}},
+	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 94, 4, {26, 26, 10, 32}}
 };
 
-static const unsigned cslistsize = sizeof(cslist)/sizeof(cslist[0]); // = 16
+//static const unsigned cslistsize = sizeof(cslist)/sizeof(cslist[0]); // = 16
 #define CSLISTFLAG 15
 // End Autogen Charsets
 
@@ -86,17 +87,23 @@ static unsigned long longdivEntropy(BIGNUM *dv, BIGNUM *rem, BIGNUM *ent, const 
 	return BN_get_word(rem);
 }
 
-static void consumeEntropy(LP_CTX *ctx, char *pass, int passlen, const char *set, int setlen)
+static void consumeEntropy(LP_CTX *ctx, char *dst, unsigned dstlen, const char *set, unsigned setlen)
 {
 	BN_set_word(ctx->d, setlen);
-	int i = 0;
-	for(i = 0; i < passlen; i++)
+	unsigned i = 0;
+	for(i = 0; i < dstlen; i++)
 	{
-		pass[i] = set[longdivEntropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx)];
+		dst[i] = set[longdivEntropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx)];
 	}
 }
 
-static int consumeEntropyInt(LP_CTX *ctx, int setlen)
+static char consumeEntropyChar(LP_CTX *ctx, const char *set, int setlen)
+{
+	BN_set_word(ctx->d, setlen);
+	return set[longdivEntropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx)];
+}
+
+static unsigned consumeEntropyInt(LP_CTX *ctx, int setlen)
 {
 	BN_set_word(ctx->d, setlen);
 	return longdivEntropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx);
@@ -196,9 +203,9 @@ static int LP_generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, co
 	unsigned len = myhexlen(ctx->counter);
 	unsigned saltlen = site->length + login->length + len;
 	char buffer[saltlen > ctx->length ? saltlen : ctx->length];
-	char *p = buffer;
 	
-	// Create salt string in buffer: site|login|hex(counter) 
+	// Create salt string in buffer: site|login|hex(counter)
+	char *p = buffer;
 	mymemcpy(p, site->value, site->length);
 	p += site->length;
 	mymemcpy(p, login->value, login->length);
@@ -217,14 +224,12 @@ static int LP_generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, co
 	consumeEntropy(ctx, buffer, len, charset->value, charset->length);
 	
 	// Select numsets characters (one from each subset of charset)
-	p = buffer + len;
 	unsigned i;
-	for(i = 1; i < cslistsize; i <<= 1)
+	unsigned offset = 0;
+	for(i = 0; i < charset->numsets; i++)
 	{
-		if(ctx->charsets & i)
-		{
-			*p++ = cslist[i].value[consumeEntropyInt(ctx, cslist[i].length)];
-		}
+		buffer[len + i] = consumeEntropyChar(ctx, charset->value + offset, charset->lensets[i]);
+		offset += charset->lensets[i];
 	}
 
 	// Combine last numsets characters into the first len characters
