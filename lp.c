@@ -195,7 +195,7 @@ typedef struct lp_vstr_s
 	unsigned length;
 } LP_VSTR;
 
-static int LP_generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const LP_STR *secret, LP_VSTR *pass)
+static int generatePassword(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const LP_STR *secret, LP_VSTR *pass)
 {
 	if(pass->length == 0)
 		return 0;
@@ -353,5 +353,5 @@ int LP_get_pass(LP_CTX *ctx, const char* site,  const char* login, const char* s
 	
 	LP_VSTR pass_str = {.value = pass, .length = passlen};
 	
-	return LP_generate(ctx, &site_str, &login_str, &secret_str, &pass_str);
+	return generatePassword(ctx, &site_str, &login_str, &secret_str, &pass_str);
 }

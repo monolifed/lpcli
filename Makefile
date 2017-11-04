@@ -1,5 +1,6 @@
-COMMON_FLAGS = -Wall -Wextra -pedantic -std=c99
+COMMON_FLAGS := -Wall -Wextra -pedantic -std=c99
 LPCLI := lpcli
+SETGEN := setgen
 # Whether it should use ossl dev library or not
 USE_OSSL_DEV := 0
 CRYPTO_LIB := crypto
@@ -22,6 +23,7 @@ ifeq ($(USE_OSSL_DEV),0)
 endif
 
 ifeq ($(OS),Windows_NT)
+	PLATFORM := win
 	RM := del /Q
 	EXT := .exe
 	CC := gcc
@@ -32,11 +34,13 @@ ifeq ($(OS),Windows_NT)
 		CFLAGS += -L$(WIN_OSSL_DLL_PATH)
 		CRYPTO_LIB := :$(WIN_OSSL_DLL)
 	endif
+else
+	PLATFORM := posix
 endif
 
-$(LPCLI)$(EXT) : lpcli.c lp.c lp_crypto.h lp.h 
+$(LPCLI)$(EXT) : lpcli_$(PLATFORM).c lpcli.c lp.c lp_crypto.h lp.h 
 	$(CC) $(CFLAGS) -o $@ $^ -l$(CRYPTO_LIB)
-setgen$(EXT) : lp_gencharsets.c
+$(SETGEN)$(EXT) : lp_gencharsets.c
 	$(CC) $(COMMON_FLAGS) -o $@ $^
 clean :
-	$(RM) $(LPCLI)$(EXT) setgen$(EXT)
+	$(RM) $(LPCLI)$(EXT) $(SETGEN)$(EXT)

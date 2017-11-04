@@ -1,34 +1,12 @@
-#ifndef _WIN32
-	#ifndef _XOPEN_SOURCE
-	#define _XOPEN_SOURCE
-	#endif
-	#include <termios.h>
-#else
-	#include <windows.h>
-	#include <conio.h>
-#endif
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
 #include <string.h>
-#include <locale.h>
 
 #include "lp.h"
 
-typedef void* (*lp_memset_f) (void*, int, size_t);
-static volatile lp_memset_f lp_memset = memset;
-void lp_zeromem(void *p, size_t s){ lp_memset(p, 0, s); }
-
-#ifndef EXIT_FAILURE
-#define EXIT_FAILURE 1
-#endif
-#define LP_FAIL EXIT_FAILURE
-
-#ifndef EXIT_SUCCESS
-#define EXIT_SUCCESS 0
-#endif
-#define LP_OK EXIT_SUCCESS
-
+#define LP_FAIL 1
+#define LP_OK 0
 
 #define ERRORS \
 	X(none, "Not an error") \
@@ -286,73 +264,6 @@ static int read_args(int argc, const char **argv, OPTIONS *opts)
 #undef TOUCH
 
 
-//FILE *popen(const char *command, const char *type);
-//int pclose(FILE *stream);
-static int copy_to_clipboard(const char *text)
-{
-#ifndef _WIN32
-	FILE *pout = popen("xclip -selection clipboard -quiet -loop 1", "w");
-	if(!pout)
-	{
-		return LP_FAIL;
-	}
-	fprintf(pout, text);
-	fflush(pout);
-	pclose(pout);
-#else
-	const size_t len = strlen(text) + 1;
-	HGLOBAL hMem =  GlobalAlloc(GMEM_MOVEABLE, len);
-	memcpy(GlobalLock(hMem), text, len);
-	GlobalUnlock(hMem);
-	OpenClipboard(0);
-	EmptyClipboard();
-	if(!SetClipboardData(CF_TEXT, hMem))
-	{
-		return LP_FAIL;
-	}
-	CloseClipboard();
-#endif
-	return LP_OK;
-}
-
-static int read_password(const char *prompt, char *out, size_t outl)
-{
-	printf(prompt);
-#ifndef _WIN32
-	static struct termios told, tnew;
-	tcgetattr(0, &told);
-	tnew = told;
-	tnew.c_lflag &= ~ICANON;
-	tnew.c_lflag &= ~ECHO;
-	tcsetattr(0, TCSANOW, &tnew);
-	
-	out = fgets(out, outl, stdin);
-	tcsetattr(0, TCSANOW, &told);
-	
-	if(!out)
-		return LP_FAIL;
-
-	out[strcspn(out, "\r\n")] = 0;
-#else
-	char c;
-	size_t i;
-	for(i=0; i < outl - 1; i++)
-	{
-		c = getch();
-		if(c == '\r')
-		{
-			printf("\n");
-			break;
-		}
-		out[i] = c;
-	}
-	out[i] = '\0';
-#endif
-	return LP_OK;
-}
-
-#define ISOPTSET(X) (options.changed & CMDLINE_##X)
-
 void print_options(OPTIONS *t)
 {
 	printf("Options: -");
@@ -369,9 +280,16 @@ void print_options(OPTIONS *t)
 	printf("\n");
 }
 
-int main(int argc, const char **argv)
+
+#define ISOPTSET(X) (options.changed & CMDLINE_##X)
+
+int lpcli_clipboardcopy(const char *text);
+int lpcli_readpassword(const char *prompt, char *out, size_t outl);
+void* lpcli_zeromemory(void *dst, size_t dstlen);
+
+int lpcli_main(int argc, const char **argv)
 {
-	if(argc < 3)
+	if(argc == 1 || (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)))
 	{
 		return print_usage();
 	}
@@ -452,14 +370,13 @@ int main(int argc, const char **argv)
 	{
 
 		char passwd_in[LPMAXSTRLEN];
-		if(read_password("Enter Password: ", passwd_in, sizeof passwd_in) != LP_OK)
+		if(lpcli_readpassword("Enter Password: ", passwd_in, sizeof passwd_in) != LP_OK)
 		{
 			LP_CTX_free(ctx);
 			return print_error(errstr[ERR_read_password]);
 		}
-		printf("\n");
 		LP_get_pass(ctx, options.site, options.login, (const char *) passwd_in, genpass, sizeof genpass);
-		lp_zeromem(passwd_in, sizeof passwd_in); // clean password read
+		lpcli_zeromemory(passwd_in, sizeof passwd_in); // clean password read
 	}
 	else
 	{
@@ -467,13 +384,13 @@ int main(int argc, const char **argv)
 	}
 	
 	int do_copy = ISOPTSET(CLIPBOARD);
-	lp_zeromem(&options, sizeof options); // clean options
+	lpcli_zeromemory(&options, sizeof options); // clean options
 	
 	LP_CTX_free(ctx);
 	
 	if(do_copy)
 	{
-		if(copy_to_clipboard(genpass) != LP_OK)
+		if(lpcli_clipboardcopy(genpass) != LP_OK)
 			return print_error(errstr[ERR_clipboard]);
 	}
 	else
@@ -481,6 +398,6 @@ int main(int argc, const char **argv)
 		printf("%s\n", genpass);
 	}
 	
-	lp_zeromem(&genpass, sizeof genpass); // clean generated password
-	return EXIT_SUCCESS;
+	lpcli_zeromemory(&genpass, sizeof genpass); // clean generated password
+	return LP_OK;
 }
