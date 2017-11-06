@@ -1,6 +1,8 @@
 #ifndef LP_CRYPTO_H
 #define LP_CRYPTO_H
 
+// proxy header for openssl/crypto 
+
 #ifndef NO_OSSL_DEV
 	#include <openssl/bn.h>
 	#include <openssl/evp.h>
@@ -43,6 +45,6 @@
 	void CRYPTO_free(void *str, const char *file, int line);
 	void OPENSSL_cleanse(void *ptr, size_t len);
 	
-#endif //HAS_OSSL_DEV
+#endif //NO_OSSL_DEV
 
 #endif //LP_CRYPTO_H

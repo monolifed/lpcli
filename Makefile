@@ -38,9 +38,12 @@ else
 	PLATFORM := posix
 endif
 
-$(LPCLI)$(EXT) : lpcli_$(PLATFORM).c lpcli.c lp.c lp_crypto.h lp.h 
-	$(CC) $(CFLAGS) -o $@ $^ -l$(CRYPTO_LIB)
-$(SETGEN)$(EXT) : lp_gencharsets.c
-	$(CC) $(COMMON_FLAGS) -o $@ $^
+LPCLI_DEPS := lpcli.h lp.h lp_crypto.h
+LPCLI_CODE := lpcli_$(PLATFORM).c lpcli.c lp.c
+$(LPCLI)$(EXT) : $(LPCLI_CODE) $(LPCLI_DEPS)
+	$(CC) $(CFLAGS) -o $@ $(LPCLI_CODE) -l$(CRYPTO_LIB)
+
+$(SETGEN)$(EXT) : lp_gencharsets.c lp.h
+	$(CC) $(COMMON_FLAGS) -o $@ $<
 clean :
 	$(RM) $(LPCLI)$(EXT) $(SETGEN)$(EXT)

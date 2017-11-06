@@ -6,6 +6,8 @@
 #include <wchar.h>
 #include <locale.h>
 
+#include "lpcli.h"
+
 int lpcli_clipboardcopy(const char *text)
 {
 	const size_t len = strlen(text) + 1;
@@ -16,10 +18,10 @@ int lpcli_clipboardcopy(const char *text)
 	EmptyClipboard();
 	if(!SetClipboardData(CF_TEXT, hMem))
 	{
-		return 1;
+		return LPCLI_FAIL;
 	}
 	CloseClipboard();
-	return 0;
+	return LPCLI_OK;
 }
 
 #define READPASS_MAX 512
@@ -45,7 +47,7 @@ int lpcli_readpassword(const char *prompt, char *out, int outl)
 	{
 		SecureZeroMemory(outbuff, sizeof outbuff);
 		fprintf(stderr, "Reached max password limit %i\n", READPASS_MAX);
-		return 1;
+		return LPCLI_FAIL;
 	}
 	int err = 0;
 	int len = WideCharToMultiByte(CP_UTF8, 0, outbuff, i, out, outl - 1, NULL, NULL);
@@ -58,9 +60,9 @@ int lpcli_readpassword(const char *prompt, char *out, int outl)
 	if(err != 0)
 	{
 		fprintf(stderr, "WideCharToMultiByte got error code %i\n", err);
-		return 1;
+		return LPCLI_FAIL;
 	}
-	return 0;
+	return LPCLI_OK;
 }
 
 static char** getargs_utf8(int *argc)
@@ -96,8 +98,6 @@ void* lpcli_zeromemory(void *dst, size_t dstlen)
 {
 	return SecureZeroMemory(dst, dstlen);
 }
-
-int lpcli_main(int argc, const char **argv);
 
 int main()
 {

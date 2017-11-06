@@ -3,22 +3,45 @@
 
 #define LPMAXSTRLEN 2048
 
+#define LP_NUM_CHARSETS 4
+#define LP_CHARSETS_X \
+	X(LOWERCASE, "abcdefghijklmnopqrstuvwxyz") \
+	X(UPPERCASE, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") \
+	X(DIGITS, "0123456789") \
+	X(SYMBOLS, "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~") \
+
+#define X(A, B) LP_CS_##A,
 typedef enum
 {
-	LP_CSF_L = (1 << 0), // Lowecase  : 0001
-	LP_CSF_U = (1 << 1), // Uppercase : 0010
-	LP_CSF_D = (1 << 2), // Digits    : 0100
-	LP_CSF_S = (1 << 3), // Symbols   : 1000
-} lp_csflag;
+	LP_CHARSETS_X
+} lp_cs_indexes;
+#undef X
 
-#define LP_CSF_ALL ((1 << 4) - 1)  // All flags set: 1111
+#define X(A, B) LP_CSF_##A = (1 << LP_CS_##A),
+typedef enum
+{
+	LP_CHARSETS_X
+} lp_cs_flags;
+#undef X
 
+#define LP_CSF_ALL ((1 << LP_NUM_CHARSETS) - 1)
+
+#ifdef LP_AUTOGEN
+#define X(A, B) B,
+static const char *charsets[] =
+{
+	LP_CHARSETS_X
+};
+#undef X
+#endif
+
+#undef LP_CHARSETS_X
 
 typedef enum
 {
-	LP_COUNTER_DEF    = 1, LP_COUNTER_MIN = 1, LP_COUNTER_MAX = 0x0FFFFFFF,
-	LP_LENGTH_DEF     = 16, LP_LENGTH_MIN = 5, LP_LENGTH_MAX = 35,
-	LP_CSF_DEF        = LP_CSF_ALL,
+	LP_COUNTER_DEF = 1, LP_COUNTER_MIN = 1, LP_COUNTER_MAX = 0x0FFFFFFF,
+	LP_LENGTH_DEF  = 16, LP_LENGTH_MIN = 5, LP_LENGTH_MAX = 35,
+	LP_CSF_DEF = LP_CSF_ALL,
 } lp_options;
 
 typedef struct lp_ctx_st LP_CTX;
@@ -54,5 +77,5 @@ unsigned LP_set_charsets(LP_CTX *ctx, unsigned);
 
 // returns ctx->length on success,
 // returns negative LP_ERR_xxx value on failure
-int LP_get_pass(LP_CTX *ctx, const char* site,  const char* login, const char* secret, char* pass, unsigned passlen);
+int LP_generate(LP_CTX *ctx, const char* site,  const char* login, const char* secret, char* pass, unsigned passlen);
 #endif //LP_H

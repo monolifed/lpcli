@@ -5,27 +5,27 @@ typedef const EVP_MD* (*evpmd_f)(void);
 #define DIGEST_ID(A) LP_MD_##A
 
 #define DIGEST_LIST \
-	X(md5), X(sha1), X(sha224), \
-	X(sha256), X(sha384), X(sha512) \
+	X(md5) X(sha1) X(sha224) \
+	X(sha256) X(sha384) X(sha512) \
 
-#define X(A) DIGEST_ID(A)
+#define X(A) DIGEST_ID(A),
 enum { DIGEST_LIST };
 #undef X
 
-#define X(A) EVP_##A
+#define X(A) EVP_##A,
 static const evpmd_f mdlist[] = { DIGEST_LIST };
 #undef X
 
 #undef DIGEST_LIST
 //static const unsigned mdlistsize = sizeof(mdlist)/sizeof(mdlist[0]);
 
-typedef enum
+enum
 {
 	LP_VER_DEF    = 2,
 	LP_KEYLEN_DEF = 32,
 	LP_ITERS_DEF  = 100000,
 	LP_DIGEST_DEF = DIGEST_ID(sha256)
-} lp_defaults;
+};
 
 // Start Autogen Charsets (indexed by flag)
 typedef struct charset_s
@@ -56,13 +56,7 @@ static const charset_t cslist[] =
 	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 94, 4, {26, 26, 10, 32}}
 };
 
-//static const unsigned cslistsize = sizeof(cslist)/sizeof(cslist[0]); // = 16
-#define CSLISTFLAG 15
 // End Autogen Charsets
-
-#if LP_CSF_ALL != CSLISTFLAG
-#error Something
-#endif
 
 struct lp_ctx_st
 {
@@ -78,35 +72,35 @@ struct lp_ctx_st
 	BN_CTX *bnctx;
 	BIGNUM *entropy;
 	BIGNUM *dv, *d, *rem;
-};
+}; //LP_CTX
 
-static unsigned long longdivEntropy(BIGNUM *dv, BIGNUM *rem, BIGNUM *ent, const BIGNUM *d, BN_CTX *bnctx)
+static unsigned long div_entropy(BIGNUM *dv, BIGNUM *rem, BIGNUM *ent, const BIGNUM *d, BN_CTX *bnctx)
 {
 	BN_div(dv, rem, ent, d, bnctx);
 	BN_copy(ent, dv);
 	return BN_get_word(rem);
 }
 
-static void consumeEntropy(LP_CTX *ctx, char *dst, unsigned dstlen, const char *set, unsigned setlen)
+static void generate_chars(LP_CTX *ctx, char *dst, unsigned dstlen, const char *set, unsigned setlen)
 {
 	BN_set_word(ctx->d, setlen);
 	unsigned i = 0;
 	for(i = 0; i < dstlen; i++)
 	{
-		dst[i] = set[longdivEntropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx)];
+		dst[i] = set[div_entropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx)];
 	}
 }
 
-static char consumeEntropyChar(LP_CTX *ctx, const char *set, int setlen)
+static char generate_char(LP_CTX *ctx, const char *set, int setlen)
 {
 	BN_set_word(ctx->d, setlen);
-	return set[longdivEntropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx)];
+	return set[div_entropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx)];
 }
 
-static unsigned consumeEntropyInt(LP_CTX *ctx, int setlen)
+static unsigned generate_int(LP_CTX *ctx, int setlen)
 {
 	BN_set_word(ctx->d, setlen);
-	return longdivEntropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx);
+	return div_entropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx);
 }
 
 static unsigned mystrnlen(const char *s, unsigned max)
@@ -167,20 +161,6 @@ static void mypushchar(char *dst, unsigned len, unsigned pos, char c)
 	dst[pos] = c;
 }
 
-/*
-Using OPENSSL_cleanse instead (which uses a volatile ptr to memset so supposedly not optimized by the compiler)
-static void mymemzero(void *dst, size_t len)
-{
-	if(dst == NULL)
-		return;
-	volatile unsigned char *p = dst;
-	while (len--)
-	{
-	*p++ = 0;
-	}
-}
-*/
-
 // (const) string
 typedef struct lp_str_s
 {
@@ -195,7 +175,7 @@ typedef struct lp_vstr_s
 	unsigned length;
 } LP_VSTR;
 
-static int generatePassword(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const LP_STR *secret, LP_VSTR *pass)
+static int generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const LP_STR *secret, LP_VSTR *pass)
 {
 	if(pass->length == 0)
 		return 0;
@@ -221,21 +201,21 @@ static int generatePassword(LP_CTX *ctx, const LP_STR *site,  const LP_STR *logi
 	// Select len (= length - numsets) characters from the merged charset
 	const charset_t *charset = &cslist[ctx->charsets & LP_CSF_ALL];
 	len = ctx->length - charset->numsets;
-	consumeEntropy(ctx, buffer, len, charset->value, charset->length);
+	generate_chars(ctx, buffer, len, charset->value, charset->length);
 	
 	// Select numsets characters (one from each subset of charset)
 	unsigned i;
 	unsigned offset = 0;
 	for(i = 0; i < charset->numsets; i++)
 	{
-		buffer[len + i] = consumeEntropyChar(ctx, charset->value + offset, charset->lensets[i]);
+		buffer[len + i] = generate_char(ctx, charset->value + offset, charset->lensets[i]);
 		offset += charset->lensets[i];
 	}
 
 	// Combine last numsets characters into the first len characters
 	for(; len < ctx->length; len++)
 	{
-		mypushchar(buffer, len + 1, consumeEntropyInt(ctx, len), buffer[len]);
+		mypushchar(buffer, len + 1, generate_int(ctx, len), buffer[len]);
 	}
 
 	mymemcpy(pass->value, buffer, pass->length > len ? len : pass->length);
@@ -302,7 +282,7 @@ unsigned LP_set_charsets(LP_CTX *ctx, unsigned charsets)
 }
 
 
-int LP_get_pass(LP_CTX *ctx, const char* site,  const char* login, const char* secret, char* pass, unsigned passlen)
+int LP_generate(LP_CTX *ctx, const char* site,  const char* login, const char* secret, char* pass, unsigned passlen)
 {
 	if(site == NULL)
 		return LP_ERR_NULL_SITE;
@@ -353,5 +333,5 @@ int LP_get_pass(LP_CTX *ctx, const char* site,  const char* login, const char* s
 	
 	LP_VSTR pass_str = {.value = pass, .length = passlen};
 	
-	return generatePassword(ctx, &site_str, &login_str, &secret_str, &pass_str);
+	return generate(ctx, &site_str, &login_str, &secret_str, &pass_str);
 }

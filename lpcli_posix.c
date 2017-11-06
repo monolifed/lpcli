@@ -9,18 +9,20 @@
 #include <wchar.h>
 #include <locale.h>
 
+#include "lpcli.h"
+
 int lpcli_clipboardcopy(const char *text)
 {
 	FILE *pout = popen("xclip -selection clipboard -quiet -loop 1", "w");
 	if(!pout)
 	{
-		return 1;
+		return LPCLI_FAIL;
 	}
 	fprintf(pout, text);
 	fflush(pout);
 	pclose(pout);
 
-	return 0;
+	return LPCLI_OK;
 }
 
 int lpcli_readpassword(const char *prompt, char *out, size_t outl)
@@ -37,11 +39,11 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 	tcsetattr(0, TCSANOW, &told);
 	
 	if(!out)
-		return 1;
+		return LPCLI_FAIL;
 
 	out[strcspn(out, "\r\n")] = 0;
 	printf("\n");
-	return 0;
+	return LPCLI_OK;
 }
 
 typedef void* (*lpcli_memset_f) (void*, int, size_t);
@@ -50,8 +52,6 @@ void* lpcli_zeromemory(void *dst, size_t dstlen)
 {
 	return lpcli_memset(dst, 0, dstlen);
 }
-
-int lpcli_main(int argc, const char **argv);
 
 int main(int argc, const char **argv)
 {
