@@ -10,4 +10,6 @@ void* lpcli_zeromemory(void *dst, size_t dstlen);
 
 int lpcli_main(int argc, const char **argv);
 
+#define MAX_INPUTWCS 512
+
 #endif //LPCLI_H

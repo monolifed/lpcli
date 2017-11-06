@@ -4,24 +4,27 @@
 #define LPMAXSTRLEN 2048
 
 #define LP_NUM_CHARSETS 4
+
 #define LP_CHARSETS_X \
 	X(LOWERCASE, "abcdefghijklmnopqrstuvwxyz") \
 	X(UPPERCASE, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") \
 	X(DIGITS, "0123456789") \
 	X(SYMBOLS, "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~") \
 
+//LP_CS_XXX
 #define X(A, B) LP_CS_##A,
 typedef enum
 {
 	LP_CHARSETS_X
-} lp_cs_indexes;
+} lp_cs_index;
 #undef X
 
+//LP_CSF_XXX = (1 << LP_CS_XXX)
 #define X(A, B) LP_CSF_##A = (1 << LP_CS_##A),
 typedef enum
 {
 	LP_CHARSETS_X
-} lp_cs_flags;
+} lp_cs_flag;
 #undef X
 
 #define LP_CSF_ALL ((1 << LP_NUM_CHARSETS) - 1)

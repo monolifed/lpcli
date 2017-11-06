@@ -24,15 +24,14 @@ int lpcli_clipboardcopy(const char *text)
 	return LPCLI_OK;
 }
 
-#define READPASS_MAX 512
 // Todo: calculate the encoded length as characters entered
 int lpcli_readpassword(const char *prompt, char *out, int outl)
 {
 	printf(prompt);
-	wchar_t outbuff[READPASS_MAX];
+	wchar_t outbuff[MAX_INPUTWCS];
 	wint_t c;
 	int i;
-	for(i=0; i < READPASS_MAX; i++)
+	for(i=0; i < MAX_INPUTWCS; i++)
 	{
 		c = _getwch();
 		if(c == L'\r')
@@ -43,10 +42,10 @@ int lpcli_readpassword(const char *prompt, char *out, int outl)
 		outbuff[i] = c;
 	}
 	printf("\n");
-	if(i >= READPASS_MAX)
+	if(i >= MAX_INPUTWCS)
 	{
 		SecureZeroMemory(outbuff, sizeof outbuff);
-		fprintf(stderr, "Reached max password limit %i\n", READPASS_MAX);
+		fprintf(stderr, "Reached max password limit %i\n", MAX_INPUTWCS);
 		return LPCLI_FAIL;
 	}
 	int err = 0;

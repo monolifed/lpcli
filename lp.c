@@ -2,29 +2,35 @@
 #include "lp.h"
 
 typedef const EVP_MD* (*evpmd_f)(void);
-#define DIGEST_ID(A) LP_MD_##A
 
-#define DIGEST_LIST \
+#define DIGEST_LIST_X \
 	X(md5) X(sha1) X(sha224) \
 	X(sha256) X(sha384) X(sha512) \
 
-#define X(A) DIGEST_ID(A),
-enum { DIGEST_LIST };
+//LP_MD_XXX
+#define X(A) LP_MD_##A,
+enum
+{
+	DIGEST_LIST_X
+};
 #undef X
 
+//EVP_XXX
 #define X(A) EVP_##A,
-static const evpmd_f mdlist[] = { DIGEST_LIST };
+static const evpmd_f mdlist[] =
+{
+	DIGEST_LIST_X
+};
 #undef X
 
-#undef DIGEST_LIST
-//static const unsigned mdlistsize = sizeof(mdlist)/sizeof(mdlist[0]);
+#undef DIGEST_LIST_X
 
 enum
 {
 	LP_VER_DEF    = 2,
 	LP_KEYLEN_DEF = 32,
 	LP_ITERS_DEF  = 100000,
-	LP_DIGEST_DEF = DIGEST_ID(sha256)
+	LP_DIGEST_DEF = LP_MD_sha256,
 };
 
 // Start Autogen Charsets (indexed by flag)
@@ -58,6 +64,7 @@ static const charset_t cslist[] =
 
 // End Autogen Charsets
 
+// typedef struct lp_ctx_st LP_CTX
 struct lp_ctx_st
 {
 	unsigned version;
@@ -72,7 +79,7 @@ struct lp_ctx_st
 	BN_CTX *bnctx;
 	BIGNUM *entropy;
 	BIGNUM *dv, *d, *rem;
-}; //LP_CTX
+};
 
 static unsigned long div_entropy(BIGNUM *dv, BIGNUM *rem, BIGNUM *ent, const BIGNUM *d, BN_CTX *bnctx)
 {
