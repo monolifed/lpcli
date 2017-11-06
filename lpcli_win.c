@@ -25,37 +25,33 @@ int lpcli_clipboardcopy(const char *text)
 }
 
 // Todo: calculate the encoded length as characters entered
-int lpcli_readpassword(const char *prompt, char *out, int outl)
+int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 {
 	printf(prompt);
-	wchar_t outbuff[MAX_INPUTWCS];
+	wchar_t input[MAX_INPUTWCS];
 	wint_t c;
 	int i;
-	for(i=0; i < MAX_INPUTWCS; i++)
+	for(i = 0; i < MAX_INPUTWCS - 1; i++)
 	{
 		c = _getwch();
 		if(c == L'\r')
 		{
-			//outbuff[i++] = 0;
+			//input[i++] = 0;
 			break;
 		}
-		outbuff[i] = c;
+		input[i] = c;
 	}
+	input[i] = 0;
 	printf("\n");
-	if(i >= MAX_INPUTWCS)
-	{
-		SecureZeroMemory(outbuff, sizeof outbuff);
-		fprintf(stderr, "Reached max password limit %i\n", MAX_INPUTWCS);
-		return LPCLI_FAIL;
-	}
 	int err = 0;
-	int len = WideCharToMultiByte(CP_UTF8, 0, outbuff, i, out, outl - 1, NULL, NULL);
+	int len = WideCharToMultiByte(CP_UTF8, 0, input, i, out, outl - 1, NULL, NULL);
+	SecureZeroMemory(input, sizeof input);
+
 	if(len == 0 || len == 0xFFFD)
 	{
 		err = GetLastError();
 	}
 	out[len] = 0;
-	SecureZeroMemory(outbuff, sizeof outbuff);
 	if(err != 0)
 	{
 		fprintf(stderr, "WideCharToMultiByte got error code %i\n", err);

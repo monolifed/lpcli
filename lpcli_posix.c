@@ -39,12 +39,11 @@ int lpcli_clipboardcopy(const char *text)
 #define UTF8_3 0xFFFF
 #define UTF8_4 0x10FFFF
 
-static int uni_to_utf8(int32_t uc, unsigned char *utf8);
-
 #if __WCHAR_MAX__ <= 0xFFFF
 #define UTF16_MODE
 #endif
 
+#ifdef UTF16_MODE
 #define SP_HI_START 0xD800
 #define SP_HI_END   0xDBFF
 #define SP_LO_START 0xDC00
@@ -57,6 +56,7 @@ int32_t sp_to_uni(wchar_t hi, wchar_t lo)
 		return 0;
 	return ((hi - SP_HI_START) << 10) + (lo - SP_LO_START) + 0x10000;
 }
+#endif //UTF16_MODE
 
 static int uni_to_utf8(int32_t uc, unsigned char *utf8)
 {
@@ -78,7 +78,7 @@ static int uni_to_utf8(int32_t uc, unsigned char *utf8)
 		{
 			return -1;
 		}
-#endif
+#endif //UTF16_MODE
 		utf8[0] = ((uc >> 12)       ) | 0xE0;
 		utf8[1] = ((uc >> 6 ) & 0x3F) | 0x80;
 		utf8[2] = ((uc      ) & 0x3F) | 0x80;
@@ -112,7 +112,7 @@ static int uni_utf8_len(int32_t uc)
 		{
 			return -1;
 		}
-#endif
+#endif //UTF16_MODE
 		return 3;
 	}
 	if(uc <= UTF8_4)
@@ -143,7 +143,7 @@ static size_t wcs_utf8_len(const wchar_t *wcs, size_t wlen)
 				return 0;
 			len = uni_utf8_len(uc);
 		}
-#endif
+#endif //UTF16_MODE
 		tlen += len;
 	}
 	return tlen;
@@ -177,7 +177,7 @@ static int wcs_to_utf8(const wchar_t *wcs, size_t wlen, unsigned char* u8, size_
 			//	return 0;
 			len = uni_to_utf8(uc, p);
 		}
-#endif
+#endif //UTF16_MODE
 		p += len;
 	}
 	//memcpy(u8, buffer, tlen);
@@ -191,12 +191,16 @@ int lpcli_readpassword_u8(char *out, size_t outl)
 	wchar_t *wp = fgetws(input, MAX_INPUTWCS, stdin);
 	if(wp == NULL)
 		return LPCLI_FAIL;
-	int len = wcs_to_utf8(input, wcscspn(input, L"\r\n"), (unsigned char *) out, outl);
+	int len = wcscspn(input, L"\r\n");
+	if(len == 0)
+		return LPCLI_FAIL;
+	len = wcs_to_utf8(input, len, (unsigned char *) out, outl - 1);
+	lpcli_zeromemory(input, sizeof input);
 	if(len <= 0)
 	{
 		return LPCLI_FAIL;
 	}
-	lpcli_zeromemory(input, sizeof input);
+	out[len] = 0;
 	return LPCLI_OK;
 }
 
@@ -204,9 +208,12 @@ int lpcli_readpassword_u8(char *out, size_t outl)
 int lpcli_readpassword_nc(char *out, size_t outl)
 {
 	out = fgets(out, outl, stdin);
-	if(!out)
+	if(out == NULL)
 		return LPCLI_FAIL;
-	out[strcspn(out, "\r\n")] = 0;
+	int len = strcspn(out, "\r\n");
+	if(len == 0)
+		return LPCLI_FAIL;
+	out[len] = 0;
 	return LPCLI_OK;
 }
 
