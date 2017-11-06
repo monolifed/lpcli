@@ -5,7 +5,9 @@ Command line options are similar to the official cli:
 https://github.com/lesspass/cli/
 
 # Caveat
-If your terminal encoding is not UTF-8 you might get different results than lesspass web for the same parameters.
+~~If your terminal encoding is not UTF-8 you might get different results than lesspass web for the same parameters.~~
+On linux, if your encoding is not UTF8, for some values provided on command line, you may get different results than of lesspass.
+You can use something like ``./lpcli `echo [site] [login] [password]|iconv -t UTF-8` `` as a work around 
 
 # Building
 Install openssl dev package and type "make -e USE_OSSL_DEV=1".
