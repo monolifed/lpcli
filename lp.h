@@ -76,7 +76,7 @@ void LP_CTX_free(LP_CTX *opts);
 // Since 0 is invalid for counter, length and charset
 unsigned LP_set_counter(LP_CTX *ctx, unsigned);
 unsigned LP_set_length(LP_CTX *ctx, unsigned);
-unsigned LP_set_charsets(LP_CTX *ctx, unsigned);
+unsigned LP_set_charset(LP_CTX *ctx, unsigned);
 
 // returns ctx->length on success,
 // returns negative LP_ERR_xxx value on failure

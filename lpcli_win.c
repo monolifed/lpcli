@@ -60,7 +60,7 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 	return LPCLI_OK;
 }
 
-static char** getargs_utf8(int *argc)
+static char** cmdline_to_argv_u8(int *argc)
 {
 	wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), argc);
 	int i;
@@ -74,7 +74,7 @@ static char** getargs_utf8(int *argc)
 		tlen += utf8len[i];
 	}
 	int argvsize = (*argc + 1) * sizeof(char*);
-	char *argvp = malloc(argvsize + tlen * sizeof(char));
+	char *argvp = malloc(argvsize + tlen);
 	char **argv = (void *) argvp;
 	argvp += argvsize;
 	for(i = 0; i < *argc; i++)
@@ -98,9 +98,8 @@ int main()
 {
 	setlocale(LC_ALL, "");
 	int argc;
-	char **_argv = getargs_utf8(&argc);
-	const char **argv = (const char **) _argv;
+	char **argv = cmdline_to_argv_u8(&argc);
 	int ret = lpcli_main(argc, argv);
-	free(_argv);
+	free(argv);
 	return ret;
 }

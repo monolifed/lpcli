@@ -32,14 +32,7 @@ int lpcli_clipboardcopy(const char *text)
 	return LPCLI_OK;
 }
 
-#include <stdint.h>
-
-#define UTF8_1 0x007F
-#define UTF8_2 0x07FF
-#define UTF8_3 0xFFFF
-#define UTF8_4 0x10FFFF
-
-#if __WCHAR_MAX__ <= 0xFFFF
+#if __WCHAR_MAX__ <= 0xFFFF && __WCHAR_MAX__ >=0x0100
 #define UTF16_MODE
 #endif
 
@@ -48,7 +41,7 @@ int lpcli_clipboardcopy(const char *text)
 #define SP_HI_END   0xDBFF
 #define SP_LO_START 0xDC00
 #define SP_LO_END   0xDFFF
-int32_t sp_to_uni(wchar_t hi, wchar_t lo)
+unsigned long sp_to_uni(wchar_t hi, wchar_t lo)
 {
 	if(hi < SP_HI_START || hi > SP_HI_END)
 		return 0;
@@ -58,7 +51,11 @@ int32_t sp_to_uni(wchar_t hi, wchar_t lo)
 }
 #endif //UTF16_MODE
 
-static int uni_to_utf8(int32_t uc, unsigned char *utf8)
+#define UTF8_1 0x007FUL
+#define UTF8_2 0x07FFUL
+#define UTF8_3 0xFFFFUL
+#define UTF8_4 0x10FFFFUL
+static int uni_to_utf8(unsigned long uc, unsigned char *utf8)
 {
 	if(uc <= UTF8_1)
 	{
@@ -67,8 +64,8 @@ static int uni_to_utf8(int32_t uc, unsigned char *utf8)
 	}
 	if(uc <= UTF8_2)
 	{
-		utf8[0] = (uc >> 6)   | 0xC0;
-		utf8[1] = (uc & 0x3F) | 0x80;
+		utf8[0] = 0xC0 | ((uc >> 6) & 0x1F);
+		utf8[1] = 0x80 | ((uc >> 0) & 0x3F);
 		return 2;
 	}
 	if(uc <= UTF8_3)
@@ -79,23 +76,23 @@ static int uni_to_utf8(int32_t uc, unsigned char *utf8)
 			return -1;
 		}
 #endif //UTF16_MODE
-		utf8[0] = ((uc >> 12)       ) | 0xE0;
-		utf8[1] = ((uc >> 6 ) & 0x3F) | 0x80;
-		utf8[2] = ((uc      ) & 0x3F) | 0x80;
+		utf8[0] = 0xE0 | ((uc >> 12) & 0x0F);
+		utf8[1] = 0x80 | ((uc >>  6) & 0x3F);
+		utf8[2] = 0x80 | ((uc >>  0) & 0x3F);
 		return 3;
 	}
 	if(uc <= UTF8_4)
 	{
-		utf8[0] = 0xF0 | ( uc >> 18);
+		utf8[0] = 0xF0 | ((uc >> 18) & 0x07);
 		utf8[1] = 0x80 | ((uc >> 12) & 0x3F);
 		utf8[2] = 0x80 | ((uc >>  6) & 0x3F);
-		utf8[3] = 0x80 | ((uc & 0x3F));
+		utf8[3] = 0x80 | ((uc >>  0) & 0x3F);
 		return 4;
 	}
 	return 0;
 }
 
-static int uni_utf8_len(int32_t uc)
+static int uni_utf8_len(unsigned long uc)
 {
 	if(uc <= UTF8_1)
 	{
@@ -138,7 +135,7 @@ static size_t wcs_utf8_len(const wchar_t *wcs, size_t wlen)
 			i++;
 			if(i >= wlen)
 				return 0;
-			int32_t uc = sp_to_uni(wcs[i - 1], wcs[i]);
+			unsigned long uc = sp_to_uni(wcs[i - 1], wcs[i]);
 			if(uc == 0)
 				return 0;
 			len = uni_utf8_len(uc);
@@ -172,7 +169,7 @@ static int wcs_to_utf8(const wchar_t *wcs, size_t wlen, unsigned char* u8, size_
 			i++;
 			//if(i >= wlen) // redundant
 			//	return 0;
-			int32_t uc = sp_to_uni(wcs[i - 1], wcs[i]);
+			unsigned long uc = sp_to_uni(wcs[i - 1], wcs[i]);
 			//if(uc == 0) // redundant
 			//	return 0;
 			len = uni_to_utf8(uc, p);
@@ -244,7 +241,7 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 	return ret;
 }
 
-int main(int argc, const char **argv)
+int main(int argc, char **argv)
 {
 	setlocale(LC_ALL, "");
 	int ret = lpcli_main(argc, argv);

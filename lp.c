@@ -279,7 +279,7 @@ unsigned LP_set_length(LP_CTX *ctx, unsigned length)
 	return ctx->length;
 }
 
-unsigned LP_set_charsets(LP_CTX *ctx, unsigned charsets)
+unsigned LP_set_charset(LP_CTX *ctx, unsigned charsets)
 {
 	if(charsets & LP_CSF_ALL)
 	{
