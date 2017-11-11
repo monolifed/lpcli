@@ -16,7 +16,7 @@ int lpcli_clipboardcopy(const char *text)
 	GlobalUnlock(hMem);
 	OpenClipboard(0);
 	EmptyClipboard();
-	if(!SetClipboardData(CF_TEXT, hMem))
+	if (!SetClipboardData(CF_TEXT, hMem))
 	{
 		return LPCLI_FAIL;
 	}
@@ -31,10 +31,10 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 	wchar_t input[MAX_INPUTWCS];
 	wint_t c;
 	int i;
-	for(i = 0; i < MAX_INPUTWCS - 1; i++)
+	for (i = 0; i < MAX_INPUTWCS - 1; i++)
 	{
 		c = _getwch();
-		if(c == L'\r')
+		if (c == L'\r')
 		{
 			//input[i++] = 0;
 			break;
@@ -46,13 +46,13 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 	int err = 0;
 	int len = WideCharToMultiByte(CP_UTF8, 0, input, i, out, outl - 1, NULL, NULL);
 	SecureZeroMemory(input, sizeof input);
-
-	if(len == 0 || len == 0xFFFD)
+	
+	if (len == 0 || len == 0xFFFD)
 	{
 		err = GetLastError();
 	}
 	out[len] = 0;
-	if(err != 0)
+	if (err != 0)
 	{
 		fprintf(stderr, "WideCharToMultiByte got error code %i\n", err);
 		return LPCLI_FAIL;
@@ -67,17 +67,17 @@ static char** cmdline_to_argv_u8(int *argc)
 	int tlen = 0;
 	int utf8len[*argc];
 	int wlen[*argc];
-	for(i = 0; i < *argc; i++)
+	for (i = 0; i < *argc; i++)
 	{
 		wlen[i] = wcslen(wargv[i]) + 1;
 		utf8len[i] = WideCharToMultiByte(CP_UTF8, 0, wargv[i], wlen[i], NULL, 0, NULL, NULL);
 		tlen += utf8len[i];
 	}
-	int argvsize = (*argc + 1) * sizeof(char*);
+	int argvsize = (*argc + 1) * sizeof(char *);
 	char *argvp = malloc(argvsize + tlen);
 	char **argv = (void *) argvp;
 	argvp += argvsize;
-	for(i = 0; i < *argc; i++)
+	for (i = 0; i < *argc; i++)
 	{
 		WideCharToMultiByte(CP_UTF8, 0, wargv[i], wlen[i], argvp, utf8len[i], NULL, NULL);
 		SecureZeroMemory(wargv[i], wlen[i]);
