@@ -68,7 +68,7 @@ typedef enum
 	
 } lp_error;
 
-LP_CTX* LP_CTX_new(void);
+LP_CTX *LP_CTX_new(void);
 void LP_CTX_free(LP_CTX *opts);
 
 // Sets the value if valid, returns to current value

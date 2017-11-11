@@ -60,7 +60,7 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 	return LPCLI_OK;
 }
 
-static char** cmdline_to_argv_u8(int *argc)
+static char **cmdline_to_argv_u8(int *argc)
 {
 	wchar_t **wargv = CommandLineToArgvW(GetCommandLineW(), argc);
 	int i;
@@ -89,7 +89,7 @@ static char** cmdline_to_argv_u8(int *argc)
 	return argv;
 }
 
-void* lpcli_zeromemory(void *dst, size_t dstlen)
+void *lpcli_zeromemory(void *dst, size_t dstlen)
 {
 	return SecureZeroMemory(dst, dstlen);
 }

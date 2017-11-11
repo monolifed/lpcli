@@ -11,9 +11,9 @@
 
 #include "lpcli.h"
 
-typedef void* (*lpcli_memset_f)(void *, int, size_t);
+typedef void *(*lpcli_memset_f)(void *, int, size_t);
 static volatile lpcli_memset_f lpcli_memset = memset;
-void* lpcli_zeromemory(void *dst, size_t dstlen)
+void *lpcli_zeromemory(void *dst, size_t dstlen)
 {
 	return lpcli_memset(dst, 0, dstlen);
 }
