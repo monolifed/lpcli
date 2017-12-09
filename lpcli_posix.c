@@ -25,7 +25,7 @@ int lpcli_clipboardcopy(const char *text)
 	{
 		return LPCLI_FAIL;
 	}
-	fprintf(pout, text);
+	fprintf(pout, "%s", text);
 	fflush(pout);
 	pclose(pout);
 	
@@ -217,7 +217,7 @@ int lpcli_readpassword_nc(char *out, size_t outl)
 #include <langinfo.h>
 int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 {
-	printf(prompt);
+	printf("%s", prompt);
 	static struct termios told, tnew;
 	tcgetattr(0, &told);
 	tnew = told;
