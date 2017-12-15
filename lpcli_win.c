@@ -27,7 +27,7 @@ int lpcli_clipboardcopy(const char *text)
 // Todo: calculate the encoded length as characters entered
 int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 {
-	printf(prompt);
+	printf("%s", prompt);
 	wchar_t input[MAX_INPUTWCS];
 	wint_t c;
 	int i;

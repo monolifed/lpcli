@@ -257,7 +257,7 @@ void LP_CTX_free(LP_CTX *ctx)
 	BN_clear_free(ctx->d);
 	BN_clear_free(ctx->rem);
 	BN_CTX_free(ctx->bnctx);
-	OPENSSL_cleanse(ctx, sizeof * ctx);
+	OPENSSL_cleanse(ctx, sizeof(LP_CTX));
 	CRYPTO_free(ctx, __FILE__, __LINE__);
 }
 
