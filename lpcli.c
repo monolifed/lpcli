@@ -359,11 +359,12 @@ int lpcli_main(int argc, char **argv)
 		LP_generate(ctx, options.site, options.login, options.password, genpass, sizeof genpass);
 	}
 	
+	int clipboardcopy = is_option_set(&options, OPTS_CLIPBOARD) ? 1 : 0;
 	lpcli_zeromemory(&options, sizeof options); // clean options
 	
 	LP_CTX_free(ctx);
 	
-	if (is_option_set(&options, OPTS_CLIPBOARD))
+	if (clipboardcopy)
 	{
 		if (lpcli_clipboardcopy(genpass) != LPCLI_OK)
 			return print_error(errstr[ERR_clipboard]);
