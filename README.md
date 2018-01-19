@@ -1,4 +1,4 @@
-# Lesspassc
+# LPCLI
 C implementation of lesspass (version 2) using openssl's crypto library.
 
 Command line options are similar to the official cli:
