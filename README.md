@@ -1,20 +1,35 @@
 # LPCLI
 C implementation of lesspass (version 2) using openssl's crypto library.
 
-Command line options are similar to the official cli:
-https://github.com/lesspass/cli/
 
-# Caveat
-~~If your terminal encoding is not UTF-8 you might get different results than lesspass web for the same parameters.~~
-On linux, if your encoding is not UTF8, for some values provided on command line, you may get different results than of lesspass.
-You can use something like ``./lpcli `echo [site] [login] [password]|iconv -t UTF-8` `` as a work around 
+## Usage
 
-# Building
+```
+$./lpcli
+Usage: lpcli <site> [login] [options]
+Options:
+  --lowercase, -l     include lowercase characters
+  --uppercase, -u     include uppercase characters
+  --digits, -d        include digits
+  --symbols, -s       include symbols
+
+  --length, -n        number of characters (16)
+  --counter, -c       number to add to salt (1)
+
+  --print, -p         print instead of copying to clipboard.
+                      xclip is required to copy to clipboard on linux.
+Notes:
+  If none of l,u,d or s specified, luds is assumed.
+  You can type short options without spaces. e.g. -ludn32c5p
+
+```
+
+## Building
 Install openssl dev package and type "make -e USE_OSSL_DEV=1".
 
 You can also edit the Makefile, set CRYPTO_SO to the libcrypto.so file available on your system and type "make".
 
-# Building on Windows with Mingw
+## Building on Windows with Mingw
 Copying "libeay32.dll" (which can be found in openssl or curl binary distributions)
 to the same directory and typing "mingw32-make" should be sufficient.
 
@@ -27,6 +42,6 @@ change WIN_OSSL_DEV_PATH and WIN_OSSL_DEV_DLL in the Makefile.
 Check: https://wiki.openssl.org/index.php/Binaries
 .
 
-# Misc
+## Misc
 For an incomplete luajit version check:
 https://gist.github.com/monolifed/e723aefb5043ccc1b817793e8502d69b

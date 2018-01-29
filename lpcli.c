@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <string.h>
 
 #include "lp.h"
@@ -35,18 +36,18 @@ static const char *errstr[] =
 int print_usage(void)
 {
 	fprintf(stderr,
-		"Usage: lpcli <site> [<login> [password]] [options]" "\n"
+		"Usage: lpcli <site> [login] [options]" "\n"
 		"Options:" "\n"
-		"  --lowercase, -l     add lowercase in password" "\n"
-		"  --uppercase, -u     add uppercase in password" "\n"
-		"  --digits, -d        add digits in password" "\n"
-		"  --symbols, -s       add symbols in password" "\n"
+		"  --lowercase, -l     include lowercase characters" "\n"
+		"  --uppercase, -u     include uppercase characters" "\n"
+		"  --digits, -d        include digits" "\n"
+		"  --symbols, -s       include symbols" "\n"
 		"\n"
-		"  --length, -L        int (default 16)" "\n"
-		"  --counter, -c       int (default 1)" "\n"
+		"  --length, -n        number of characters (16)" "\n"
+		"  --counter, -c       number to add to salt (1)" "\n"
 		"\n"
-		"  --clipboard, -C     copy to clipboard instead of displaying it." "\n"
-		"                      xclip is required on linux." "\n"
+		"  --print, -p         print instead of copying to clipboard." "\n"
+		"                      xclip is required to copy to clipboard on linux." "\n"
 	);
 	fflush(stderr);
 	return LPCLI_FAIL;
@@ -83,13 +84,13 @@ enum
 	OPTS_CSF_SYMBOLS   = LP_CSF_SYMBOLS,
 	OPTS_LENGTH    = (1 << (LP_NUM_CHARSETS + 0)),
 	OPTS_COUNTER   = (1 << (LP_NUM_CHARSETS + 1)),
-	OPTS_PASSWORD  = (1 << (LP_NUM_CHARSETS + 2)),
-	OPTS_CLIPBOARD = (1 << (LP_NUM_CHARSETS + 3))
+	OPTS_PRINT     = (1 << (LP_NUM_CHARSETS + 2)),
+	//OPTS_PASSWORD  = (1 << (LP_NUM_CHARSETS + 3))
 };
 
-static int is_option_set(LPCLI_OPTS *opts, int flag)
+static bool is_option_set(LPCLI_OPTS *opts, int flag)
 {
-	return (opts->flags & flag) ? 1 : 0;
+	return (opts->flags & flag) ? true : false;
 }
 
 static void set_option(LPCLI_OPTS *opts, int flag)
@@ -117,14 +118,14 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 		ptr = argv[++i]; // next
 	}
 	
-	if (ptr && *ptr != '-')
-	{
-		opts->password = ptr;
-		set_option(opts, OPTS_PASSWORD);
-		ptr = argv[++i]; // next
-	}
+	//if (ptr && *ptr != '-')
+	//{
+	//	opts->password = ptr;
+	//	set_option(opts, OPTS_PASSWORD);
+	//	ptr = argv[++i]; // next
+	//}
 	
-	int opt_open = 0;
+	bool opt_open = false;
 	
 	while (argv[i] != NULL)
 	{
@@ -142,7 +143,7 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 			{
 				return LPCLI_FAIL;
 			}
-			opt_open = 0;
+			opt_open = true;
 			ptr = argv[++i];
 			break;
 		case '-': // --
@@ -165,9 +166,9 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 			{
 				set_option(opts, OPTS_CSF_SYMBOLS);
 			}
-			else if (strcmp(ptr, "clipboard") == 0)
+			else if (strcmp(ptr, "print") == 0)
 			{
-				set_option(opts, OPTS_CLIPBOARD);
+				set_option(opts, OPTS_PRINT);
 			}
 			else if (strcmp(ptr, "length") == 0)
 			{
@@ -195,7 +196,7 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 			}
 			ptr = argv[++i];
 			break;
-		case 'L':
+		case 'n':
 			ptr++;
 			if (*ptr == '\0')
 			{
@@ -208,7 +209,7 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 			//	return 1;
 			set_option(opts, OPTS_LENGTH);
 			ptr = ptrEnd;
-			opt_open = 1;
+			opt_open = true;
 			//ptr = argv[++i];
 			//opt_open = 0;
 			break;
@@ -225,34 +226,34 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 			//	return 1;
 			set_option(opts, OPTS_COUNTER);
 			ptr = ptrEnd;
-			opt_open = 1;
+			opt_open = true;
 			//ptr = argv[++i];
 			//opt_open = 0;
 			break;
 		case 'l':
 			set_option(opts, OPTS_CSF_LOWERCASE);
 			ptr++;
-			opt_open = 1;
+			opt_open = true;
 			break;
 		case 'u':
 			set_option(opts, OPTS_CSF_UPPERCASE);
 			ptr++;
-			opt_open = 1;
+			opt_open = true;
 			break;
 		case 'd':
 			set_option(opts, OPTS_CSF_DIGITS);
 			ptr++;
-			opt_open = 1;
+			opt_open = true;
 			break;
 		case 's':
 			set_option(opts, OPTS_CSF_SYMBOLS);
 			ptr++;
-			opt_open = 1;
+			opt_open = true;
 			break;
-		case 'C':
-			set_option(opts, OPTS_CLIPBOARD);
+		case 'p':
+			set_option(opts, OPTS_PRINT);
 			ptr++;
-			opt_open = 1;
+			opt_open = true;
 			break;
 		default:
 			return LPCLI_FAIL;
@@ -273,7 +274,7 @@ void print_options(LPCLI_OPTS *t)
 	if (t->flags & OPTS_CSF_SYMBOLS)
 		printf("s");
 	printf("c%u", t->counter);
-	printf("L%u", t->length);
+	printf("n%u", t->length);
 	printf("\n");
 }
 
@@ -342,7 +343,7 @@ int lpcli_main(int argc, char **argv)
 	
 	print_options(&options);
 	
-	if (!is_option_set(&options, OPTS_PASSWORD))
+	//if (!is_option_set(&options, OPTS_PASSWORD))
 	{
 	
 		char passwd_in[LPMAXSTRLEN];
@@ -354,12 +355,12 @@ int lpcli_main(int argc, char **argv)
 		LP_generate(ctx, options.site, options.login, (const char *) passwd_in, genpass, sizeof genpass);
 		lpcli_zeromemory(passwd_in, sizeof passwd_in); // clean password read
 	}
-	else
-	{
-		LP_generate(ctx, options.site, options.login, options.password, genpass, sizeof genpass);
-	}
+	//else
+	//{
+	//	LP_generate(ctx, options.site, options.login, options.password, genpass, sizeof genpass);
+	//}
 	
-	int clipboardcopy = is_option_set(&options, OPTS_CLIPBOARD) ? 1 : 0;
+	bool clipboardcopy = is_option_set(&options, OPTS_PRINT) ? false : true;
 	lpcli_zeromemory(&options, sizeof options); // clean options
 	
 	LP_CTX_free(ctx);
