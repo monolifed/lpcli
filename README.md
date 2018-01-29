@@ -24,6 +24,8 @@ Notes:
 
 ```
 
+Do not forget to check that you get the same password with both this one and lesspass.
+
 ## Building
 Install openssl dev package and type "make -e USE_OSSL_DEV=1".
 
