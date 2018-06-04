@@ -1,36 +1,14 @@
-#include "lp_crypto.h"
 #include "lp.h"
+#include "stdlib.h"
 
-typedef const EVP_MD *(*evpmd_f)(void);
-
-#define DIGEST_LIST_X \
-	X(md5) X(sha1) X(sha224) \
-	X(sha256) X(sha384) X(sha512) \
-
-//LP_MD_XXX
-#define X(A) LP_MD_##A,
-enum
-{
-	DIGEST_LIST_X
-};
-#undef X
-
-//EVP_XXX
-#define X(A) EVP_##A,
-static const evpmd_f mdlist[] =
-{
-	DIGEST_LIST_X
-};
-#undef X
-
-#undef DIGEST_LIST_X
+#include "pbkdf2_hmac_sha256.h"
+#include "bn.h"
 
 enum
 {
 	LP_VER_DEF    = 2,
 	LP_KEYLEN_DEF = 32,
 	LP_ITERS_DEF  = 100000,
-	LP_DIGEST_DEF = LP_MD_sha256,
 };
 
 // Start Autogen Charsets (indexed by flag)
@@ -70,44 +48,47 @@ struct lp_ctx_st
 	unsigned version;
 	unsigned keylen;
 	unsigned iterations;
-	unsigned digest;
+	//unsigned digest;
 	
 	unsigned counter;
 	unsigned length;
 	unsigned charsets;
 	
-	BN_CTX *bnctx;
-	BIGNUM *entropy;
-	BIGNUM *dv, *d, *rem;
+	//BN_CTX *bnctx;
+	struct bn entropy;
+	struct bn dv, d, rem;
 };
 
-static unsigned long div_entropy(BIGNUM *dv, BIGNUM *rem, BIGNUM *ent, const BIGNUM *d, BN_CTX *bnctx)
+static unsigned long div_entropy(struct bn *dv, struct bn *rem, struct bn *ent, struct bn *d)
 {
-	BN_div(dv, rem, ent, d, bnctx);
-	BN_copy(ent, dv);
-	return BN_get_word(rem);
+	struct bn temp;
+	bignum_div(ent, d, dv);
+	bignum_mul(d, dv, &temp);
+	bignum_sub(ent, &temp, rem);
+	bignum_assign(ent, dv);
+	return bignum_to_int(rem);
 }
 
 static void generate_chars(LP_CTX *ctx, char *dst, unsigned dstlen, const char *set, unsigned setlen)
 {
-	BN_set_word(ctx->d, setlen);
+	bignum_from_int(&ctx->d, setlen);
 	unsigned i = 0;
 	for (i = 0; i < dstlen; i++)
 	{
-		dst[i] = set[div_entropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx)];
+		dst[i] = set[div_entropy(&ctx->dv, &ctx->rem, &ctx->entropy, &ctx->d)];
 	}
 }
 
 static char generate_char(LP_CTX *ctx, const char *set, int setlen)
 {
-	BN_set_word(ctx->d, setlen);
-	return set[div_entropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx)];
+	bignum_from_int(&ctx->d, setlen);
+	return set[div_entropy(&ctx->dv, &ctx->rem, &ctx->entropy, &ctx->d)];
 }
 
 static unsigned generate_int(LP_CTX *ctx, int setlen)
 {
-	BN_set_word(ctx->d, setlen);
-	return div_entropy(ctx->dv, ctx->rem, ctx->entropy, ctx->d, ctx->bnctx);
+	bignum_from_int(&ctx->d, setlen);
+	return div_entropy(&ctx->dv, &ctx->rem, &ctx->entropy, &ctx->d);
 }
 
 static unsigned mystrnlen(const char *s, unsigned max)
@@ -201,9 +182,10 @@ static int generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const
 	
 	// Create entropy number from PBKDF2
 	unsigned char keybuf[ctx->keylen];
-	PKCS5_PBKDF2_HMAC(secret->value, secret->length, (unsigned char *)buffer, saltlen, ctx->iterations, mdlist[ctx->digest](), sizeof keybuf, keybuf);
-	BN_bin2bn(keybuf, sizeof keybuf, ctx->entropy);
-	OPENSSL_cleanse(keybuf, sizeof keybuf);
+	pbkdf2_sha256((uint8_t *) secret->value, secret->length, (uint8_t *) buffer, saltlen,
+		ctx->iterations, keybuf, sizeof keybuf);
+	bignum_init2(&ctx->entropy, keybuf, sizeof keybuf);
+	//--->OPENSSL_cleanse(keybuf, sizeof keybuf);
 	
 	// Select len (= length - numsets) characters from the merged charset
 	const charset_t *charset = &cslist[ctx->charsets & LP_CSF_ALL];
@@ -226,39 +208,38 @@ static int generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const
 	}
 	
 	mymemcpy(pass->value, buffer, pass->length > len ? len : pass->length);
-	OPENSSL_cleanse(buffer, sizeof buffer);
+	//--->OPENSSL_cleanse(buffer, sizeof buffer);
 	return len;
 }
 
 LP_CTX *LP_CTX_new(void)
 {
-	LP_CTX *ctx = CRYPTO_malloc(sizeof(LP_CTX), __FILE__, __LINE__);
+	LP_CTX *ctx = malloc(sizeof(LP_CTX));
 	ctx->version = LP_VER_DEF;
 	ctx->keylen = LP_KEYLEN_DEF;
 	ctx->iterations = LP_ITERS_DEF;
-	ctx->digest = LP_DIGEST_DEF;
+	//ctx->digest = LP_DIGEST_DEF;
 	
 	ctx->counter = LP_COUNTER_DEF;
 	ctx->length = LP_LENGTH_DEF;
 	ctx->charsets = LP_CSF_DEF;
 	
-	ctx->bnctx = BN_CTX_new();
-	ctx->entropy = BN_new();
-	ctx->dv = BN_new();
-	ctx->d = BN_new();
-	ctx->rem = BN_new();
+	bignum_init(&ctx->entropy);
+	bignum_init(&ctx->dv);
+	bignum_init(&ctx->d);
+	bignum_init(&ctx->rem);
 	return ctx;
 }
 
 void LP_CTX_free(LP_CTX *ctx)
 {
-	BN_clear_free(ctx->entropy);
-	BN_clear_free(ctx->dv);
-	BN_clear_free(ctx->d);
-	BN_clear_free(ctx->rem);
-	BN_CTX_free(ctx->bnctx);
-	OPENSSL_cleanse(ctx, sizeof(LP_CTX));
-	CRYPTO_free(ctx, __FILE__, __LINE__);
+	//BN_clear_free(ctx->entropy);
+	//BN_clear_free(ctx->dv);
+	//BN_clear_free(ctx->d);
+	//BN_clear_free(ctx->rem);
+	//BN_CTX_free(ctx->bnctx);
+	//--->OPENSSL_cleanse(ctx, sizeof(LP_CTX));
+	free(ctx);
 }
 
 unsigned LP_set_counter(LP_CTX *ctx, unsigned counter)
@@ -308,8 +289,8 @@ int LP_generate(LP_CTX *ctx, const char *site,  const char *login, const char *s
 		return LP_ERR_KEYLEN;
 	if (ctx->iterations != LP_ITERS_DEF)
 		return LP_ERR_ITER;
-	if (ctx->digest != LP_DIGEST_DEF)
-		return LP_ERR_DIGEST;
+	//if (ctx->digest != LP_DIGEST_DEF)
+	//	return LP_ERR_DIGEST;
 	//if(ctx->digest >= mdlistsize)
 	//{
 	//	return LP_ERR_DIGEST;

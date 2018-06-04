@@ -28,23 +28,6 @@ Notes:
 
 Do not forget to check that you get the same password with both this one and lesspass.
 
-## Building
-Install openssl dev package and type "make -e USE_OSSL_DEV=1".
-
-You can also edit the Makefile, set CRYPTO_SO to the libcrypto.so file available on your system and type "make".
-
-## Building on Windows with Mingw
-Copying "libeay32.dll" (which can be found in openssl or curl binary distributions)
-to the same directory and typing "mingw32-make" should be sufficient.
-
-If your dll has a different name and path,
-you should change WIN_OSSL_DLL and WIN_OSSL_DLL_PATH in the Makefile.
-
-If you are using openssl library, you should set USE_OSSL_DEV to 1 and 
-change WIN_OSSL_DEV_PATH and WIN_OSSL_DEV_DLL in the Makefile.
-
-Check: https://wiki.openssl.org/index.php/Binaries
-.
 
 ## Misc
 For an incomplete luajit version check:

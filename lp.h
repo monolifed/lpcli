@@ -55,7 +55,7 @@ typedef enum
 	LP_ERR_VERSION, // version is not 2 (internal)
 	LP_ERR_KEYLEN,  // keylen is not 32 (internal)
 	LP_ERR_ITER,    // iterations is not 100000 (internal)
-	LP_ERR_DIGEST,  // digest is not sha256 (internal)
+	//LP_ERR_DIGEST,  // digest is not sha256 (internal)
 	
 	LP_ERR_LENGTH,  // passlen out of range
 	LP_ERR_COUNTER, // counter out of range
