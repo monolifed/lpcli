@@ -2,7 +2,7 @@
 #include "stdlib.h"
 
 #include "pbkdf2_hmac_sha256.h"
-#include "bn.h"
+//#include "bn.h"
 
 enum
 {
@@ -42,53 +42,88 @@ static const charset_t cslist[] =
 
 // End Autogen Charsets
 
+// ~(max dk len)/(sizeof uint32_t)
+#define ENT_LEN  10
 // typedef struct lp_ctx_st LP_CTX
 struct lp_ctx_st
 {
 	unsigned version;
 	unsigned keylen;
 	unsigned iterations;
-	//unsigned digest;
 	
 	unsigned counter;
 	unsigned length;
 	unsigned charsets;
 	
-	//BN_CTX *bnctx;
-	struct bn entropy;
-	struct bn dv, d, rem;
+	uint32_t entropy[ENT_LEN];
 };
 
-static unsigned long div_entropy(struct bn *dv, struct bn *rem, struct bn *ent, struct bn *d)
+#ifndef BIG_ENDIAN
+#define BE_VALUE(S) (S[0]<<24 | S[1]<<16 | S[2]<<8 | S[3])
+#else
+#define BE_VALUE(S) (* (DTYPE *) (S))
+#endif
+static void init_entropy(uint32_t *ent, uint8_t *buffer, uint32_t buflen)
 {
-	struct bn temp;
-	bignum_div(ent, d, dv);
-	bignum_mul(d, dv, &temp);
-	bignum_sub(ent, &temp, rem);
-	bignum_assign(ent, dv);
-	return bignum_to_int(rem);
+	int i = buflen - 4;
+	int j = 0;
+	// NOTE: only works if buflen = 4*K (but keylen is 32)
+	for (; i >= 0; i -= 4, j++)
+	{
+		ent[j] = BE_VALUE((buffer + i));
+	}
+	
+	for (; j < ENT_LEN; j++)
+	{
+		ent[j] = 0;
+	}
+}
+#undef BE_VALUE
+
+static uint32_t div_entropy(uint32_t *ent, uint32_t d)
+{
+	int i = ENT_LEN - 1;
+	for (; i >= 0; i--)
+	{
+		if (ent[i] != 0)
+			break;
+	}
+	
+	if (i == -1)
+	{
+		return 0;
+	}
+	
+	uint64_t qt = 0;
+	uint64_t r = 0;
+	for (; i >= 0; i--)
+	{
+		qt = r << 32;
+		qt |= ent[i];
+		r = qt % d;
+		ent[i] = qt / d;
+	}
+	return r;
 }
 
 static void generate_chars(LP_CTX *ctx, char *dst, unsigned dstlen, const char *set, unsigned setlen)
 {
-	bignum_from_int(&ctx->d, setlen);
+	//bn_from_int(&ctx->d, setlen);
 	unsigned i = 0;
 	for (i = 0; i < dstlen; i++)
 	{
-		dst[i] = set[div_entropy(&ctx->dv, &ctx->rem, &ctx->entropy, &ctx->d)];
+		dst[i] = set[div_entropy(ctx->entropy, setlen)];
 	}
 }
 
 static char generate_char(LP_CTX *ctx, const char *set, int setlen)
 {
-	bignum_from_int(&ctx->d, setlen);
-	return set[div_entropy(&ctx->dv, &ctx->rem, &ctx->entropy, &ctx->d)];
+	return set[div_entropy(ctx->entropy, setlen)];
 }
 
 static unsigned generate_int(LP_CTX *ctx, int setlen)
 {
-	bignum_from_int(&ctx->d, setlen);
-	return div_entropy(&ctx->dv, &ctx->rem, &ctx->entropy, &ctx->d);
+	return div_entropy(ctx->entropy, setlen);
 }
 
 static unsigned mystrnlen(const char *s, unsigned max)
@@ -163,6 +198,8 @@ typedef struct lp_vstr_s
 	unsigned length;
 } LP_VSTR;
 
+void zeromem(void *, size_t);
+
 static int generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const LP_STR *secret, LP_VSTR *pass)
 {
 	if (pass->length == 0)
@@ -184,8 +221,8 @@ static int generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const
 	unsigned char keybuf[ctx->keylen];
 	pbkdf2_sha256((uint8_t *) secret->value, secret->length, (uint8_t *) buffer, saltlen,
 		ctx->iterations, keybuf, sizeof keybuf);
-	bignum_init2(&ctx->entropy, keybuf, sizeof keybuf);
-	//--->OPENSSL_cleanse(keybuf, sizeof keybuf);
+	init_entropy(ctx->entropy, keybuf, sizeof keybuf);
+	zeromem(keybuf, sizeof keybuf);
 	
 	// Select len (= length - numsets) characters from the merged charset
 	const charset_t *charset = &cslist[ctx->charsets & LP_CSF_ALL];
@@ -206,9 +243,10 @@ static int generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const
 	{
 		mypushchar(buffer, len + 1, generate_int(ctx, len), buffer[len]);
 	}
+	zeromem(ctx->entropy, sizeof ctx->entropy);
 	
 	mymemcpy(pass->value, buffer, pass->length > len ? len : pass->length);
-	//--->OPENSSL_cleanse(buffer, sizeof buffer);
+	zeromem(buffer, sizeof buffer);
 	return len;
 }
 
@@ -218,27 +256,17 @@ LP_CTX *LP_CTX_new(void)
 	ctx->version = LP_VER_DEF;
 	ctx->keylen = LP_KEYLEN_DEF;
 	ctx->iterations = LP_ITERS_DEF;
-	//ctx->digest = LP_DIGEST_DEF;
 	
 	ctx->counter = LP_COUNTER_DEF;
 	ctx->length = LP_LENGTH_DEF;
 	ctx->charsets = LP_CSF_DEF;
 	
-	bignum_init(&ctx->entropy);
-	bignum_init(&ctx->dv);
-	bignum_init(&ctx->d);
-	bignum_init(&ctx->rem);
 	return ctx;
 }
 
 void LP_CTX_free(LP_CTX *ctx)
 {
-	//BN_clear_free(ctx->entropy);
-	//BN_clear_free(ctx->dv);
-	//BN_clear_free(ctx->d);
-	//BN_clear_free(ctx->rem);
-	//BN_CTX_free(ctx->bnctx);
-	//--->OPENSSL_cleanse(ctx, sizeof(LP_CTX));
+	zeromem(ctx, sizeof(LP_CTX));
 	free(ctx);
 }
 
@@ -289,13 +317,7 @@ int LP_generate(LP_CTX *ctx, const char *site,  const char *login, const char *s
 		return LP_ERR_KEYLEN;
 	if (ctx->iterations != LP_ITERS_DEF)
 		return LP_ERR_ITER;
-	//if (ctx->digest != LP_DIGEST_DEF)
-	//	return LP_ERR_DIGEST;
-	//if(ctx->digest >= mdlistsize)
-	//{
-	//	return LP_ERR_DIGEST;
-	//}
-	
+		
 	if (ctx->length > LP_LENGTH_MAX || ctx->length < LP_LENGTH_MIN)
 		return LP_ERR_LENGTH;
 	if (ctx->counter > LP_COUNTER_MAX || ctx->counter < LP_COUNTER_MIN)

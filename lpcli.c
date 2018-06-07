@@ -278,6 +278,8 @@ void print_options(LPCLI_OPTS *t)
 	printf("\n");
 }
 
+void zeromem(void *, size_t);
+
 int lpcli_main(int argc, char **argv)
 {
 	if (argc == 1 || (argc == 2 && (strcmp(argv[1], "--help") == 0 || strcmp(argv[1], "-h") == 0)))
@@ -353,7 +355,7 @@ int lpcli_main(int argc, char **argv)
 			return print_error(errstr[ERR_read_password]);
 		}
 		LP_generate(ctx, options.site, options.login, (const char *) passwd_in, genpass, sizeof genpass);
-		lpcli_zeromemory(passwd_in, sizeof passwd_in); // clean password read
+		zeromem(passwd_in, sizeof passwd_in); // clean password read
 	}
 	//else
 	//{
@@ -361,7 +363,7 @@ int lpcli_main(int argc, char **argv)
 	//}
 	
 	bool clipboardcopy = is_option_set(&options, OPTS_PRINT) ? false : true;
-	lpcli_zeromemory(&options, sizeof options); // clean options
+	zeromem(&options, sizeof options); // clean options
 	
 	LP_CTX_free(ctx);
 	
@@ -375,6 +377,6 @@ int lpcli_main(int argc, char **argv)
 		printf("%s\n", genpass);
 	}
 	
-	lpcli_zeromemory(&genpass, sizeof genpass); // clean generated password
+	zeromem(&genpass, sizeof genpass); // clean generated password
 	return LPCLI_OK;
 }

@@ -12,8 +12,8 @@ else
 	PLATFORM := posix
 endif
 
-LPCLI_DEPS := lpcli.h lp.h pbkdf2_hmac_sha256.h bn.h
-LPCLI_CODE := lpcli_$(PLATFORM).c lpcli.c lp.c pbkdf2_hmac_sha256.c bn.c
+LPCLI_DEPS := lpcli.h lp.h pbkdf2_hmac_sha256.h
+LPCLI_CODE := lpcli_$(PLATFORM).c lpcli.c lp.c pbkdf2_hmac_sha256.c zeromem.c
 $(LPCLI)$(EXT) : $(LPCLI_CODE) $(LPCLI_DEPS)
 	$(CC) $(CFLAGS) -o $@ $(LPCLI_CODE)
 

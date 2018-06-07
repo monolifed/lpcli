@@ -11,12 +11,14 @@
 
 #include "lpcli.h"
 
+/*
 typedef void *(*lpcli_memset_f)(void *, int, size_t);
 static volatile lpcli_memset_f lpcli_memset = memset;
 void *lpcli_zeromemory(void *dst, size_t dstlen)
 {
 	return lpcli_memset(dst, 0, dstlen);
 }
+*/
 
 int lpcli_clipboardcopy(const char *text)
 {
@@ -181,6 +183,8 @@ static int wcs_to_utf8(const wchar_t *wcs, size_t wlen, unsigned char *u8, size_
 	return tlen;
 }
 
+void zeromem(void *, size_t);
+
 // read as wchar convert to utf8
 int lpcli_readpassword_u8(char *out, size_t outl)
 {
@@ -192,7 +196,7 @@ int lpcli_readpassword_u8(char *out, size_t outl)
 	if (len == 0)
 		return LPCLI_FAIL;
 	len = wcs_to_utf8(input, len, (unsigned char *) out, outl - 1);
-	lpcli_zeromemory(input, sizeof input);
+	zeromem(input, sizeof input);
 	if (len <= 0)
 	{
 		return LPCLI_FAIL;

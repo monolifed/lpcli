@@ -2,7 +2,32 @@
 #include <stdint.h>
 #include <string.h>
 
-#include "pbkdf2_hmac_sha256.h"
+#define SHA256_PLACEBO
+
+/// STRUCT DEFINITIONS
+
+#define SHA256_BLOCKLEN  64ul //size of message block buffer
+#define SHA256_DIGESTLEN 32ul //size of digest
+#define SHA256_DIGESTINT 8ul  //size in uint32_t = 32/4
+
+typedef struct sha256_ctx_t
+{
+	uint64_t len;                 // processed message length
+	uint32_t h[SHA256_DIGESTINT]; // hash state
+	uint8_t buf[SHA256_BLOCKLEN]; // message block buffer
+#ifdef SHA256_PLACEBO
+	uint32_t W[64]; // so we can zero it later
+#endif
+} SHA256_CTX;
+
+typedef struct hmac_sha256_ctx_t
+{
+	uint32_t h_inner[SHA256_DIGESTINT];
+	uint32_t h_outer[SHA256_DIGESTINT];
+	SHA256_CTX sha;
+} HMAC_SHA256_CTX;
+
+/// END OF DEFINITIONS
 
 static uint32_t ror(uint32_t n, uint32_t k)
 {
@@ -108,7 +133,7 @@ static void pad(SHA256_CTX *s)
 	processblock(s, s->buf);
 }
 
-void sha256_init(SHA256_CTX *s)
+static void sha256_init(SHA256_CTX *s)
 {
 	s->len = 0;
 	
@@ -124,7 +149,7 @@ void sha256_init(SHA256_CTX *s)
 	//memset(s->buf, 0, SHA256_BLOCKLEN);
 }
 
-void sha256_final(SHA256_CTX *s, uint8_t *md)
+static void sha256_final(SHA256_CTX *s, uint8_t *md)
 {
 	uint32_t i;
 	
@@ -139,7 +164,7 @@ void sha256_final(SHA256_CTX *s, uint8_t *md)
 	sha256_init(s); // reset;
 }
 
-void sha256_update(SHA256_CTX *s, const uint8_t *m, uint32_t len)
+static void sha256_update(SHA256_CTX *s, const uint8_t *m, uint32_t len)
 {
 	const uint8_t *p = m;
 	uint32_t r = s->len % SHA256_BLOCKLEN;
@@ -167,7 +192,7 @@ void sha256_update(SHA256_CTX *s, const uint8_t *m, uint32_t len)
 #define INNER_PAD '\x36'
 #define OUTER_PAD '\x5c'
 
-void hmac_sha256_init(HMAC_SHA256_CTX *hmac, const uint8_t *key, uint32_t keylen)
+static void hmac_sha256_init(HMAC_SHA256_CTX *hmac, const uint8_t *key, uint32_t keylen)
 {
 	if (keylen <= SHA256_BLOCKLEN)
 	{
@@ -206,12 +231,12 @@ void hmac_sha256_init(HMAC_SHA256_CTX *hmac, const uint8_t *key, uint32_t keylen
 	memcpy(hmac->h_inner, hmac->sha.h, SHA256_DIGESTLEN);
 }
 
-void hmac_sha256_update(HMAC_SHA256_CTX *hmac, const uint8_t *m, uint32_t mlen)
+static void hmac_sha256_update(HMAC_SHA256_CTX *hmac, const uint8_t *m, uint32_t mlen)
 {
 	sha256_update(&hmac->sha, m, mlen);
 }
 
-void hmac_sha256_final(HMAC_SHA256_CTX *hmac, uint8_t *md)
+static void hmac_sha256_final(HMAC_SHA256_CTX *hmac, uint8_t *md)
 {
 	sha256_final(&hmac->sha, md);
 	
@@ -224,6 +249,10 @@ void hmac_sha256_final(HMAC_SHA256_CTX *hmac, uint8_t *md)
 	hmac->sha.len = SHA256_BLOCKLEN;
 	memcpy(hmac->sha.h, hmac->h_inner, SHA256_BLOCKLEN);
 }
+
+#ifdef SHA256_PLACEBO
+void zeromem(void *dst, size_t dstlen);
+#endif
 
 void pbkdf2_sha256(const uint8_t *key, uint32_t keylen, const uint8_t *salt, uint32_t saltlen,
 	uint32_t rounds, uint8_t *dk, uint32_t dklen)
@@ -266,6 +295,10 @@ void pbkdf2_sha256(const uint8_t *key, uint32_t keylen, const uint8_t *salt, uin
 		}
 		T += len;
 	}
-	
+#ifdef SHA256_PLACEBO
+	// zero U and hmac
+	zeromem(U, sizeof U);
+	zeromem(&hmac, sizeof hmac);
+#endif
 }
 

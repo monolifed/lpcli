@@ -89,10 +89,12 @@ static char **cmdline_to_argv_u8(int *argc)
 	return argv;
 }
 
+/*
 void *lpcli_zeromemory(void *dst, size_t dstlen)
 {
 	return SecureZeroMemory(dst, dstlen);
 }
+*/
 
 int main()
 {
