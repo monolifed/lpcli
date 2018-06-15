@@ -1,5 +1,5 @@
 # LPCLI
-C implementation of lesspass (version 2) using openssl's crypto library.
+C implementation of lesspass (version 2) without any external dependencies.
 
 
 ## Usage
