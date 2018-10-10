@@ -20,8 +20,14 @@ void *lpcli_zeromemory(void *dst, size_t dstlen)
 }
 */
 
+#ifndef USE_XLIP
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+#endif
+
 int lpcli_clipboardcopy(const char *text)
 {
+#ifdef USE_XCLIP
 	FILE *pout = popen("xclip -selection clipboard -quiet -loop 1", "w");
 	if (!pout)
 	{
@@ -32,6 +38,93 @@ int lpcli_clipboardcopy(const char *text)
 	pclose(pout);
 	
 	return LPCLI_OK;
+#else
+	// https://github.com/ccxvii/snippets/blob/master/x11clipboard.c
+	Display *display = XOpenDisplay(NULL);
+	
+	Atom clipboard = XInternAtom(display, "CLIPBOARD", 0);
+	Atom targets = XInternAtom(display, "TARGETS", False);
+	Atom textatoms[] =
+	{
+		XInternAtom(display, "UTF8_STRING", True),
+		XA_STRING,
+		XInternAtom(display, "TEXT", False),
+	};
+	
+	int textatoms_len = sizeof(textatoms) / sizeof(Atom);
+	
+	Window window = XCreateSimpleWindow(display, DefaultRootWindow(display),
+			0, 0, 1, 1, 0, CopyFromParent, CopyFromParent);
+	XSetSelectionOwner(display, clipboard, window, CurrentTime);
+	Window owner = XGetSelectionOwner(display, clipboard);
+	if (window != owner)
+	{
+		return LPCLI_FAIL;
+	}
+	
+	XEvent event;
+	while (1)
+	{
+		XNextEvent(display, &event);
+		
+		switch (event.type)
+		{
+		case SelectionClear:
+			return LPCLI_OK;
+			
+		case SelectionRequest:
+		{
+			XSelectionRequestEvent *sre = &event.xselectionrequest;
+			// For obsolete clients
+			if (sre->property == None)
+			{
+				sre->property = sre->target;
+			}
+			
+			XSelectionEvent se =
+			{
+				.type = SelectionNotify, .serial = 0, .send_event = False, .display = display,
+				.requestor = sre->requestor, .selection = sre->selection, .target = sre->target,
+				.property = sre->property, .time = CurrentTime
+			};
+			
+			int canpaste = 0;
+			for (int i = 0; i < textatoms_len; i++)
+			{
+				if (sre->target != None && sre->target == textatoms[i])
+				{
+					canpaste = 1;
+					break;
+				}
+			}
+			
+			if (sre->target == targets)
+			{
+				XChangeProperty(display, sre->requestor, sre->property, sre->target,
+					32, PropModeReplace, (unsigned char *) textatoms, textatoms_len);
+			}
+			else if (canpaste)
+			{
+				XChangeProperty(display, sre->requestor, sre->property, sre->target,
+					8, PropModeReplace, (unsigned char *) text, strlen(text));
+			}
+			else
+			{
+				se.property = None;
+			}
+			
+			XSendEvent(display, sre->requestor, False, 0, (XEvent *) &se);
+			if (canpaste)
+			{
+				XSetSelectionOwner(display, clipboard, None, CurrentTime);
+			}
+		}
+		break;
+		}
+	}
+	
+	return LPCLI_OK;
+#endif
 }
 
 #if __WCHAR_MAX__ <= 0xFFFF && __WCHAR_MAX__ >=0x0100

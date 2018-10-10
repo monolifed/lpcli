@@ -10,6 +10,11 @@ ifeq ($(OS),Windows_NT)
 	CC := gcc
 else
 	PLATFORM := posix
+	ifeq ($(HAS_XCLIP), 1)
+		CFLAGS = $(COMMON_FLAGS) -DUSE_XCLIP
+	else
+		CFLAGS = $(COMMON_FLAGS) -lX11
+	endif
 endif
 
 LPCLI_DEPS := lpcli.h lp.h pbkdf2_hmac_sha256.h
