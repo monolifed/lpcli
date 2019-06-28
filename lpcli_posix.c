@@ -20,7 +20,7 @@ void *lpcli_zeromemory(void *dst, size_t dstlen)
 }
 */
 
-#ifndef USE_XLIP
+#ifndef USE_XCLIP
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #endif
