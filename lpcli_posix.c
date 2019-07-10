@@ -28,7 +28,7 @@ void *lpcli_zeromemory(void *dst, size_t dstlen)
 int lpcli_clipboardcopy(const char *text)
 {
 #ifdef USE_XCLIP
-	FILE *pout = popen("xclip -selection clipboard -quiet -loop 1", "w");
+	FILE *pout = popen("xclip -selection clipboard", "w");
 	if (!pout)
 	{
 		return LPCLI_FAIL;
