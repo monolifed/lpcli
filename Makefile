@@ -17,7 +17,7 @@ else
 	endif
 endif
 
-LPCLI_DEPS := lpcli.h lp.c pbkdf2_sha256.h
+LPCLI_DEPS := lpcli.h lp.h pbkdf2_sha256.h
 LPCLI_CODE := lpcli_$(PLATFORM).c lpcli.c
 $(LPCLI)$(EXT) : $(LPCLI_DEPS)
 $(LPCLI)$(EXT) : $(LPCLI_CODE)

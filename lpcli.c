@@ -5,7 +5,7 @@
 #include <string.h>
 
 #define LP_IMPLEMENTATION
-#include "lp.c"
+#include "lp.h"
 
 #include "lpcli.h"
 
