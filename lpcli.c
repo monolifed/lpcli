@@ -4,7 +4,9 @@
 #include <stdbool.h>
 #include <string.h>
 
-#include "lp.h"
+#define LP_IMPLEMENTATION
+#include "lp.c"
+
 #include "lpcli.h"
 
 #define ERRORS_X \
@@ -278,7 +280,9 @@ void print_options(LPCLI_OPTS *t)
 	printf("\n");
 }
 
-void zeromem(void *, size_t);
+#ifndef zeromem
+#define zeromem(dst,len) lpcli_zeromemory(dst,len)
+#endif
 
 int lpcli_main(int argc, char **argv)
 {
@@ -293,7 +297,10 @@ int lpcli_main(int argc, char **argv)
 		return print_error(errstr[ERR_unrecognized_options]);
 	}
 	
-	LP_CTX *ctx = LP_CTX_new();
+	LP_CTX lpctx;
+	LP_CTX_init(&lpctx);
+
+	LP_CTX *ctx = &lpctx;
 	
 	unsigned temp;
 	unsigned charset = options.flags & LP_CSF_ALL;
@@ -302,7 +309,7 @@ int lpcli_main(int argc, char **argv)
 		temp = LP_set_charset(ctx, charset);
 		if (temp != charset)
 		{
-			LP_CTX_free(ctx);
+			zeromem(ctx, sizeof *ctx);
 			return print_error(errstr[ERR_cannot_set_to], "charset flags", charset);
 		}
 	}
@@ -317,7 +324,7 @@ int lpcli_main(int argc, char **argv)
 		temp = LP_set_length(ctx, options.length);
 		if (temp != (unsigned) options.length)
 		{
-			LP_CTX_free(ctx);
+			zeromem(ctx, sizeof *ctx);
 			return print_error(errstr[ERR_cannot_set_to], "length", options.length);
 		}
 	}
@@ -331,7 +338,7 @@ int lpcli_main(int argc, char **argv)
 		temp = LP_set_counter(ctx, options.counter);
 		if (temp != (unsigned) options.counter)
 		{
-			LP_CTX_free(ctx);
+			zeromem(ctx, sizeof *ctx);
 			return print_error(errstr[ERR_cannot_set_to], "counter", options.counter);
 		}
 	}
@@ -351,7 +358,7 @@ int lpcli_main(int argc, char **argv)
 		char passwd_in[LPMAXSTRLEN];
 		if (lpcli_readpassword("Enter Password: ", passwd_in, sizeof passwd_in) != LPCLI_OK)
 		{
-			LP_CTX_free(ctx);
+			zeromem(ctx, sizeof *ctx);
 			return print_error(errstr[ERR_read_password]);
 		}
 		LP_generate(ctx, options.site, options.login, (const char *) passwd_in, genpass, sizeof genpass);
@@ -365,7 +372,7 @@ int lpcli_main(int argc, char **argv)
 	bool clipboardcopy = is_option_set(&options, OPTS_PRINT) ? false : true;
 	zeromem(&options, sizeof options); // clean options
 	
-	LP_CTX_free(ctx);
+	zeromem(ctx, sizeof *ctx);
 	
 	if (clipboardcopy)
 	{

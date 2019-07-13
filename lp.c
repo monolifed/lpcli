@@ -1,17 +1,113 @@
-#include "lp.h"
-#include "stdlib.h"
+#ifndef LP_INCLUDE
+#define LP_INCLUDE
 
-#include "pbkdf2_hmac_sha256.h"
-//#include "bn.h"
+#include "pbkdf2_sha256.h"
+#include <stdint.h>
 
-enum
+#define LPMAXSTRLEN 2048
+
+#define LP_VER    2      // default version
+#ifndef LP_KEYLEN
+#define LP_KEYLEN 32     // pbkdf2 keylen for version 2
+#endif
+#ifndef LP_ITERS
+#define LP_ITERS  100000 // pbkdf2 iterations for version 2
+#endif
+
+#define LP_NUM_CHARSETS 4
+#define LP_CHARSETS_X \
+	X(LOWERCASE, "abcdefghijklmnopqrstuvwxyz") \
+	X(UPPERCASE, "ABCDEFGHIJKLMNOPQRSTUVWXYZ") \
+	X(DIGITS,    "0123456789") \
+	X(SYMBOLS,   "!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~") \
+
+//LP_CS_XXX
+#define X(A, B) LP_CS_##A,
+typedef enum
 {
-	LP_VER_DEF    = 2,
-	LP_KEYLEN_DEF = 32,
-	LP_ITERS_DEF  = 100000,
-};
+	LP_CHARSETS_X
+} lp_cs_index;
+#undef X
 
-// Start Autogen Charsets (indexed by flag)
+//LP_CSF_XXX = (1 << LP_CS_XXX)
+#define X(A, B) LP_CSF_##A = (1 << LP_CS_##A),
+typedef enum
+{
+	LP_CHARSETS_X
+} lp_cs_flag;
+#undef X
+
+#define LP_CSF_ALL ((1 << LP_NUM_CHARSETS) - 1)
+
+#undef LP_CHARSETS_X
+
+typedef enum
+{
+	LP_COUNTER_DEF = 1, LP_COUNTER_MIN = 1, LP_COUNTER_MAX = 0x0FFFFFFF,
+	LP_LENGTH_DEF  = 16, LP_LENGTH_MIN = 5, LP_LENGTH_MAX = 35,
+	LP_CSF_DEF = LP_CSF_ALL,
+} lp_options;
+
+#define ENT_LEN  10 // LP_LENGTH_MAX / sizeof(uint32_t) + 1
+typedef struct lp_ctx_st
+{
+	unsigned version;
+	unsigned keylen;
+	unsigned iterations;
+	
+	unsigned counter;
+	unsigned length;
+	unsigned charsets;
+	
+	uint32_t entropy[ENT_LEN];
+	HMAC_SHA256_CTX hmac;
+    unsigned saltlen;
+	char buffer[LPMAXSTRLEN];
+	uint8_t keybuf[LP_KEYLEN];
+} LP_CTX;
+
+typedef enum
+{
+	LP_ERR_GENERIC = -64,
+	LP_ERR_VERSION, // version is not 2 (internal)
+	LP_ERR_KEYLEN,  // keylen is not 32 (internal)
+	LP_ERR_ITER,    // iterations is not 100000 (internal)
+	//LP_ERR_DIGEST,  // digest is not sha256 (internal)
+	
+	LP_ERR_LENGTH,  // passlen out of range
+	LP_ERR_COUNTER, // counter out of range
+	LP_ERR_FLAGS,   // no charsets flags selected
+	LP_ERR_INIT,    // LP_CTX is not initialized
+	LP_ERR_NULL_SITE,
+	LP_ERR_NULL_LOGIN,
+	LP_ERR_LONG_SALT, // generated salt too long (>=LPMAXSTRLEN)
+	LP_ERR_NULL_SECRET, LP_ERR_LONG_SECRET, // (>=LPMAXSTRLEN)
+	LP_ERR_NULL_PASS
+	
+} lp_error;
+
+void LP_CTX_init(LP_CTX *ctx);
+
+// Sets the value if valid, returns to current value
+// ret = LP_set_xxx(ctx, 0); is a getter
+// Since 0 is invalid for counter, length and charset
+unsigned LP_set_counter(LP_CTX *ctx, unsigned);
+unsigned LP_set_length(LP_CTX *ctx, unsigned);
+unsigned LP_set_charset(LP_CTX *ctx, unsigned);
+
+// returns ctx->length on success,
+// returns negative LP_ERR_xxx value on failure
+int LP_generate(LP_CTX *ctx, const char *site,  const char *login, const char *secret, char *pass, unsigned passlen);
+#endif // LP_INCLUDE
+
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+
+#ifdef LP_IMPLEMENTATION
+
+#define PBKDF2_SHA256_STATIC
+#define PBKDF2_SHA256_IMPLEMENTATION
+#include "pbkdf2_sha256.h"
+
 typedef struct charset_s
 {
 	const char *value;
@@ -40,34 +136,17 @@ static const charset_t cslist[] =
 	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 94, 4, {26, 26, 10, 32}}
 };
 
-// End Autogen Charsets
-
-// ~(max dk len)/(sizeof uint32_t)
-#define ENT_LEN  10
-// typedef struct lp_ctx_st LP_CTX
-struct lp_ctx_st
-{
-	unsigned version;
-	unsigned keylen;
-	unsigned iterations;
-	
-	unsigned counter;
-	unsigned length;
-	unsigned charsets;
-	
-	uint32_t entropy[ENT_LEN];
-};
 
 #ifndef BIG_ENDIAN
 #define BE_VALUE(S) (S[0]<<24 | S[1]<<16 | S[2]<<8 | S[3])
 #else
-#define BE_VALUE(S) (* (DTYPE *) (S))
+#define BE_VALUE(S) (* (uint32_t *) (S))
 #endif
 static void init_entropy(uint32_t *ent, uint8_t *buffer, uint32_t buflen)
 {
 	int i = buflen - 4;
 	int j = 0;
-	// NOTE: only works if buflen = 4*K (but keylen is 32)
+	// NOTE: assumes buflen is a multiple of 4
 	for (; i >= 0; i -= 4, j++)
 	{
 		ent[j] = BE_VALUE((buffer + i));
@@ -89,17 +168,13 @@ static uint32_t div_entropy(uint32_t *ent, uint32_t d)
 			break;
 	}
 	
-	if (i == -1)
-	{
-		return 0;
-	}
+	if (i == -1) {return 0;}
 	
 	uint64_t qt = 0;
 	uint64_t r = 0;
 	for (; i >= 0; i--)
 	{
-		qt = r << 32;
-		qt |= ent[i];
+		qt = (r << 32) | ent[i];
 		r = qt % d;
 		ent[i] = qt / d;
 	}
@@ -108,9 +183,7 @@ static uint32_t div_entropy(uint32_t *ent, uint32_t d)
 
 static void generate_chars(LP_CTX *ctx, char *dst, unsigned dstlen, const char *set, unsigned setlen)
 {
-	//bn_from_int(&ctx->d, setlen);
-	unsigned i = 0;
-	for (i = 0; i < dstlen; i++)
+	for (unsigned i = 0; i < dstlen; i++)
 	{
 		dst[i] = set[div_entropy(ctx->entropy, setlen)];
 	}
@@ -128,8 +201,8 @@ static unsigned generate_int(LP_CTX *ctx, int setlen)
 
 static unsigned mystrnlen(const char *s, unsigned max)
 {
-	if (!s || !*s)
-		return 0;
+	if (!s || !*s) {return 0;}
+	
 	unsigned i;
 	for (i = 0; (i < max) && s[i]; i++);
 	return i;
@@ -144,20 +217,21 @@ static unsigned mystrlen(const char *s)
 
 static unsigned myhexlen(unsigned u)
 {
-	if (u == 0)
-		return 1;
+	if (u == 0) {return 1;}
+	
 	unsigned d;
 	for (d = 0; u; d++)
+	{
 		u >>= 4;
+	}
 	return d;
 }
 
 static void mysprinthex(char *dst, unsigned dlen, unsigned u)
 {
-	static const char hexchars[] = "0123456789abcdef";
+	static const char hexchars[] = "0123456789abcdef"; //version 2 uses small letters
 	
-	unsigned d;
-	for (d = dlen; d > 0; d--)
+	for (unsigned d = dlen; d > 0; d--)
 	{
 		dst[d - 1] = hexchars[u & 0xF];
 		u >>= 4;
@@ -174,100 +248,54 @@ static void mymemcpy(char *dst, const char *src, unsigned count)
 
 static void mypushchar(char *dst, unsigned len, unsigned pos, char c)
 {
-	/* Alt. method
-	for(i = len - 1; i > pos; i--)
-	{
-		dst[i] = dst[i - 1];
-	}
-	*/
 	mymemcpy(dst + pos + 1, dst + pos, len - pos - 1);
 	dst[pos] = c;
 }
 
-// (const) string
-typedef struct lp_str_s
+static int generate(LP_CTX *ctx, const char *secret, unsigned secretlen, char *pass, unsigned passlen)
 {
-	const char *value;
-	unsigned length;
-} LP_STR;
-
-// variable string
-typedef struct lp_vstr_s
-{
-	char *value;
-	unsigned length;
-} LP_VSTR;
-
-void zeromem(void *, size_t);
-
-static int generate(LP_CTX *ctx, const LP_STR *site,  const LP_STR *login, const LP_STR *secret, LP_VSTR *pass)
-{
-	if (pass->length == 0)
+	if (passlen == 0)
 		return 0;
-		
-	unsigned len = myhexlen(ctx->counter);
-	unsigned saltlen = site->length + login->length + len;
-	char buffer[saltlen > ctx->length ? saltlen : ctx->length];
-	
-	// Create salt string in buffer: site|login|hex(counter)
-	char *p = buffer;
-	mymemcpy(p, site->value, site->length);
-	p += site->length;
-	mymemcpy(p, login->value, login->length);
-	p += login->length;
-	mysprinthex(p, len, ctx->counter);
 	
 	// Create entropy number from PBKDF2
-	unsigned char keybuf[ctx->keylen];
-	pbkdf2_sha256((uint8_t *) secret->value, secret->length, (uint8_t *) buffer, saltlen,
-		ctx->iterations, keybuf, sizeof keybuf);
-	init_entropy(ctx->entropy, keybuf, sizeof keybuf);
-	zeromem(keybuf, sizeof keybuf);
+	pbkdf2_sha256(&ctx->hmac, (uint8_t *) secret, secretlen,
+		(uint8_t *) ctx->buffer, ctx->saltlen, ctx->iterations, ctx->keybuf, LP_KEYLEN);
+	
+	init_entropy(ctx->entropy, ctx->keybuf, LP_KEYLEN);
 	
 	// Select len (= length - numsets) characters from the merged charset
 	const charset_t *charset = &cslist[ctx->charsets & LP_CSF_ALL];
-	len = ctx->length - charset->numsets;
-	generate_chars(ctx, buffer, len, charset->value, charset->length);
+	unsigned len = ctx->length - charset->numsets;
+	generate_chars(ctx, ctx->buffer, len, charset->value, charset->length);
 	
 	// Select numsets characters (one from each subset of charset)
 	unsigned i;
 	unsigned offset = 0;
 	for (i = 0; i < charset->numsets; i++)
 	{
-		buffer[len + i] = generate_char(ctx, charset->value + offset, charset->lensets[i]);
+		ctx->buffer[len + i] = generate_char(ctx, charset->value + offset, charset->lensets[i]);
 		offset += charset->lensets[i];
 	}
 	
 	// Combine last numsets characters into the first len characters
 	for (; len < ctx->length; len++)
 	{
-		mypushchar(buffer, len + 1, generate_int(ctx, len), buffer[len]);
+		mypushchar(ctx->buffer, len + 1, generate_int(ctx, len), ctx->buffer[len]);
 	}
-	zeromem(ctx->entropy, sizeof ctx->entropy);
 	
-	mymemcpy(pass->value, buffer, pass->length > len ? len : pass->length);
-	zeromem(buffer, sizeof buffer);
+	mymemcpy(pass, ctx->buffer, passlen > len ? len : passlen);
 	return len;
 }
 
-LP_CTX *LP_CTX_new(void)
+void LP_CTX_init(LP_CTX *ctx)
 {
-	LP_CTX *ctx = malloc(sizeof(LP_CTX));
-	ctx->version = LP_VER_DEF;
-	ctx->keylen = LP_KEYLEN_DEF;
-	ctx->iterations = LP_ITERS_DEF;
+	ctx->version = LP_VER;
+	ctx->keylen = LP_KEYLEN;
+	ctx->iterations = LP_ITERS;
 	
 	ctx->counter = LP_COUNTER_DEF;
 	ctx->length = LP_LENGTH_DEF;
 	ctx->charsets = LP_CSF_DEF;
-	
-	return ctx;
-}
-
-void LP_CTX_free(LP_CTX *ctx)
-{
-	zeromem(ctx, sizeof(LP_CTX));
-	free(ctx);
 }
 
 unsigned LP_set_counter(LP_CTX *ctx, unsigned counter)
@@ -311,11 +339,11 @@ int LP_generate(LP_CTX *ctx, const char *site,  const char *login, const char *s
 		
 	if (ctx == NULL)
 		return LP_ERR_INIT;
-	if (ctx->version != LP_VER_DEF)
+	if (ctx->version != LP_VER)
 		return LP_ERR_VERSION;
-	if (ctx->keylen != LP_KEYLEN_DEF)
+	if (ctx->keylen != LP_KEYLEN)
 		return LP_ERR_KEYLEN;
-	if (ctx->iterations != LP_ITERS_DEF)
+	if (ctx->iterations != LP_ITERS)
 		return LP_ERR_ITER;
 		
 	if (ctx->length > LP_LENGTH_MAX || ctx->length < LP_LENGTH_MIN)
@@ -325,23 +353,26 @@ int LP_generate(LP_CTX *ctx, const char *site,  const char *login, const char *s
 	if ((ctx->charsets & LP_CSF_ALL) == 0)
 		return LP_ERR_FLAGS;
 		
-	unsigned len;
-	len = mystrnlen(site, LPMAXSTRLEN);
-	if (len >= LPMAXSTRLEN)
-		return LP_ERR_LONG_SITE;
-	LP_STR site_str = {.value = site, .length = len};
+	unsigned sitelen  = mystrnlen(site, LPMAXSTRLEN);
+	unsigned loginlen = mystrnlen(login, LPMAXSTRLEN);
+	unsigned ctrlen   = myhexlen(ctx->counter);
+	ctx->saltlen = sitelen + loginlen + ctrlen;
 	
-	len = mystrnlen(login, LPMAXSTRLEN);
-	if (len >= LPMAXSTRLEN)
-		return LP_ERR_LONG_LOGIN;
-	LP_STR login_str = {.value = login, .length = len};
-	
-	len = mystrnlen(secret, LPMAXSTRLEN);
-	if (len >= LPMAXSTRLEN)
+	if (ctx->saltlen >= LPMAXSTRLEN)
+		return LP_ERR_LONG_SALT;
+
+	// Create salt string in ctx->buffer: site|login|hex(counter)
+	char *p = ctx->buffer;
+	mymemcpy(p, site, sitelen);
+	p += sitelen;
+	mymemcpy(p, login, loginlen);
+	p += loginlen;
+	mysprinthex(p, ctrlen, ctx->counter);
+    
+	unsigned secretlen = mystrnlen(secret, LPMAXSTRLEN);
+	if (secretlen >= LPMAXSTRLEN)
 		return LP_ERR_LONG_SECRET;
-	LP_STR secret_str = {.value = secret, .length = len};
 	
-	LP_VSTR pass_str = {.value = pass, .length = passlen};
-	
-	return generate(ctx, &site_str, &login_str, &secret_str, &pass_str);
+	return generate(ctx, secret, secretlen, pass, passlen);
 }
+#endif // LP_IMPLEMENTATION
