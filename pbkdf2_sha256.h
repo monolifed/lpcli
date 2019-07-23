@@ -39,8 +39,8 @@ PBKDF2_SHA256_DEF void hmac_sha256_update(HMAC_SHA256_CTX *hmac, const uint8_t *
 PBKDF2_SHA256_DEF void hmac_sha256_final(HMAC_SHA256_CTX *hmac, uint8_t *md);
 
 PBKDF2_SHA256_DEF void pbkdf2_sha256(HMAC_SHA256_CTX *ctx,
-	const uint8_t *key, uint32_t keylen, const uint8_t *salt, uint32_t saltlen, uint32_t rounds,
-	uint8_t *dk, uint32_t dklen);
+    const uint8_t *key, uint32_t keylen, const uint8_t *salt, uint32_t saltlen, uint32_t rounds,
+    uint8_t *dk, uint32_t dklen);
 
 #endif // PBKDF2_SHA256_INCLUDE
 
@@ -201,7 +201,7 @@ PBKDF2_SHA256_DEF void sha256_update(SHA256_CTX *s, const uint8_t *m, uint32_t l
 PBKDF2_SHA256_DEF void hmac_sha256_init(HMAC_SHA256_CTX *hmac, const uint8_t *key, uint32_t keylen)
 {
 	SHA256_CTX *sha = &hmac->sha;
-
+	
 	if (keylen <= SHA256_BLOCKLEN)
 	{
 		memcpy(hmac->buf, key, keylen);
@@ -214,7 +214,7 @@ PBKDF2_SHA256_DEF void hmac_sha256_init(HMAC_SHA256_CTX *hmac, const uint8_t *ke
 		sha256_final(sha, hmac->buf);
 		memset(hmac->buf + SHA256_DIGESTLEN, '\0', SHA256_BLOCKLEN - SHA256_DIGESTLEN);
 	}
-
+	
 	uint32_t i;
 	for (i = 0; i < SHA256_BLOCKLEN; i++)
 	{
@@ -260,8 +260,8 @@ PBKDF2_SHA256_DEF void hmac_sha256_final(HMAC_SHA256_CTX *hmac, uint8_t *md)
 }
 
 PBKDF2_SHA256_DEF void pbkdf2_sha256(HMAC_SHA256_CTX *hmac,
-	const uint8_t *key, uint32_t keylen, const uint8_t *salt, uint32_t saltlen, uint32_t rounds,
-	uint8_t *dk, uint32_t dklen)
+    const uint8_t *key, uint32_t keylen, const uint8_t *salt, uint32_t saltlen, uint32_t rounds,
+    uint8_t *dk, uint32_t dklen)
 {
 	uint32_t hlen = SHA256_DIGESTLEN;
 	uint32_t l = dklen / hlen + ((dklen % hlen) ? 1 : 0);

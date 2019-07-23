@@ -45,7 +45,7 @@ int lpcli_clipboardcopy(const char *text)
 #else
 	// https://github.com/ccxvii/snippets/blob/master/x11clipboard.c
 	Display *display = XOpenDisplay(NULL);
-
+	
 	Atom clipboard = XInternAtom(display, "CLIPBOARD", 0);
 	Atom targets = XInternAtom(display, "TARGETS", False);
 	Atom textatoms[] =
@@ -54,25 +54,25 @@ int lpcli_clipboardcopy(const char *text)
 		XA_STRING,
 		XInternAtom(display, "TEXT", False),
 	};
-
+	
 	int textatoms_len = sizeof(textatoms) / sizeof(Atom);
-
+	
 	Window window = XCreateSimpleWindow(display, DefaultRootWindow(display),
-	                                    0, 0, 1, 1, 0, CopyFromParent, CopyFromParent);
+	        0, 0, 1, 1, 0, CopyFromParent, CopyFromParent);
 	XSetSelectionOwner(display, clipboard, window, CurrentTime);
 	Window owner = XGetSelectionOwner(display, clipboard);
 	if (window != owner) {return LPCLI_FAIL;}
-
+	
 	XEvent event;
 	while (1)
 	{
 		XNextEvent(display, &event);
-
+	
 		switch (event.type)
 		{
 		case SelectionClear:
 			return LPCLI_OK;
-
+	
 		case SelectionRequest:
 		{
 			XSelectionRequestEvent *sre = &event.xselectionrequest;
@@ -93,7 +93,7 @@ int lpcli_clipboardcopy(const char *text)
 			if (sre->target == targets)
 			{
 				XChangeProperty(display, sre->requestor, sre->property, sre->target,
-				                32, PropModeReplace, (unsigned char *) textatoms, textatoms_len);
+				    32, PropModeReplace, (unsigned char *) textatoms, textatoms_len);
 			}
 			else
 			{
@@ -109,7 +109,7 @@ int lpcli_clipboardcopy(const char *text)
 				if (canpaste)
 				{
 					XChangeProperty(display, sre->requestor, sre->property, sre->target,
-					                8, PropModeReplace, (unsigned char *) text, strlen(text));
+					    8, PropModeReplace, (unsigned char *) text, strlen(text));
 				}
 				else
 				{
@@ -207,10 +207,10 @@ static size_t wcs_utf8len(const wchar_t *wcs, size_t wcslen)
 static int wcs_toutf8(const wchar_t *wcs, size_t wlen, unsigned char *out, size_t outlen)
 {
 	if (wlen == 0) {return 0;}
-
+	
 	size_t tlen = wcs_utf8len(wcs, wlen);
 	if (tlen == 0 || outlen < tlen) {return -1;}
-
+	
 	unsigned char *p = out;
 	for (unsigned i = 0; i < wlen; i++)
 	{
@@ -225,14 +225,14 @@ static int lpcli_readpassword_utf8(char *out, size_t outlen)
 	wchar_t input[MAX_INPUTWCS];
 	wchar_t *wp = fgetws(input, MAX_INPUTWCS, stdin);
 	if (wp == NULL) {return LPCLI_FAIL;}
-
+	
 	int len = wcscspn(input, L"\r\n");
 	if (len == 0) {return LPCLI_FAIL;}
-
+	
 	len = wcs_toutf8(input, len, (unsigned char *) out, outlen - 1);
 	lpcli_zeromemory(input, sizeof input);
 	if (len <= 0) {return LPCLI_FAIL;}
-
+	
 	out[len] = 0;
 	return LPCLI_OK;
 }
@@ -243,10 +243,10 @@ static int lpcli_readpassword_nc(char *out, size_t outlen)
 {
 	out = fgets(out, outlen, stdin);
 	if (out == NULL) {return LPCLI_FAIL;}
-
+	
 	int len = strcspn(out, "\r\n");
 	if (len == 0) {return LPCLI_FAIL;}
-
+	
 	out[len] = 0;
 	return LPCLI_OK;
 }
@@ -260,7 +260,7 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outlen)
 	tnew.c_lflag &= ~ICANON;
 	tnew.c_lflag &= ~ECHO;
 	tcsetattr(0, TCSANOW, &tnew);
-
+	
 	int ret;
 #ifndef NOCONVERSION
 	if (strcmp(nl_langinfo(CODESET), "UTF-8") != 0)
@@ -272,7 +272,7 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outlen)
 	{
 		ret = lpcli_readpassword_nc(out, outlen);
 	}
-
+	
 	tcsetattr(0, TCSANOW, &told);
 	printf("\n");
 	return ret;

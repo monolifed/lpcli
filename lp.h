@@ -87,7 +87,7 @@ LP_DEF unsigned LP_check_charsets(unsigned);
 LP_DEF int LP_generate(LP_CTX *ctx, const char *site,  const char *login, const char *secret);
 #endif // LP_INCLUDE
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - 
+// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
 
 #ifdef LP_IMPLEMENTATION
 
@@ -151,8 +151,7 @@ static uint32_t div_entropy(uint32_t *ent, uint32_t d)
 	int i = ENT_LEN - 1;
 	for (; i >= 0; i--)
 	{
-		if (ent[i] != 0)
-			break;
+		if (ent[i] != 0) {break;}
 	}
 	
 	if (i == -1) {return 0;}
@@ -243,8 +242,8 @@ static int generate(LP_CTX *ctx, const char *secret, unsigned secretlen)
 {
 	// Create entropy number from PBKDF2
 	pbkdf2_sha256(&ctx->hmac, (uint8_t *) secret, secretlen,
-		(uint8_t *) ctx->buffer, ctx->buflen, ctx->iterations, ctx->keybuf, LP_KEYLEN);
-	
+	    (uint8_t *) ctx->buffer, ctx->buflen, ctx->iterations, ctx->keybuf, LP_KEYLEN);
+	    
 	init_entropy(ctx->entropy, ctx->keybuf, LP_KEYLEN);
 	
 	// Select len (= length - numsets) characters from the merged charset

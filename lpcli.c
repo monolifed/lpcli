@@ -34,19 +34,19 @@ static const char *errstr[] = {ERRORS_X};
 int print_usage(void)
 {
 	fprintf(stderr,
-		"Usage: lpcli <site> [login] [options]" "\n"
-		"Options:" "\n"
-		"  --lowercase, -l     include lowercase characters" "\n"
-		"  --uppercase, -u     include uppercase characters" "\n"
-		"  --digits, -d        include digits" "\n"
-		"  --symbols, -s       include symbols" "\n"
-		"\n"
-		"  --length, -n        number of characters (default 16)" "\n"
-		"  --counter, -c       number to add to salt (default 1)" "\n"
-		"\n"
-		"  --print, -p         print instead of copying to clipboard." "\n"
+	    "Usage: lpcli <site> [login] [options]" "\n"
+	    "Options:" "\n"
+	    "  --lowercase, -l     include lowercase characters" "\n"
+	    "  --uppercase, -u     include uppercase characters" "\n"
+	    "  --digits, -d        include digits" "\n"
+	    "  --symbols, -s       include symbols" "\n"
+	    "\n"
+	    "  --length, -n        number of characters (default 16)" "\n"
+	    "  --counter, -c       number to add to salt (default 1)" "\n"
+	    "\n"
+	    "  --print, -p         print instead of copying to clipboard." "\n"
 #ifdef USE_XCLIP
-		"                      xclip is required to copy to clipboard." "\n"
+	    "                      xclip is required to copy to clipboard." "\n"
 #endif
 	);
 	fflush(stderr);
@@ -243,13 +243,13 @@ void print_options(LP_CTX *t)
 {
 	printf("Options: -");
 	if (t->charsets & LP_CSF_LOWERCASE)
-		printf("l");
+	{ printf("l"); }
 	if (t->charsets & LP_CSF_UPPERCASE)
-		printf("u");
+	{ printf("u"); }
 	if (t->charsets & LP_CSF_DIGITS)
-		printf("d");
+	{ printf("d"); }
 	if (t->charsets & LP_CSF_SYMBOLS)
-		printf("s");
+	{ printf("s"); }
 	printf("c%u", t->counter);
 	printf("n%u", t->length);
 	printf("\n");
@@ -308,7 +308,7 @@ int lpcli_main(int argc, char **argv)
 	
 	int ret = LP_generate(&ctx, options.site, options.login, (const char *) passwd_in);
 	zeromem(passwd_in, sizeof passwd_in); // clean password read
-
+	
 	if (ret < 1)
 	{
 		// zeromem(&ctx, sizeof ctx); //no need
@@ -320,7 +320,7 @@ int lpcli_main(int argc, char **argv)
 	if (clipboardcopy)
 	{
 		if (lpcli_clipboardcopy(ctx.buffer) != LPCLI_OK)
-			return print_error(errstr[ERR_CLIPBOARD]);
+		{ return print_error(errstr[ERR_CLIPBOARD]); }
 	}
 	else
 	{
