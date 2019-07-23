@@ -1,13 +1,11 @@
+#ifdef USE_XCLIP
 #ifndef _XOPEN_SOURCE
-#define _XOPEN_SOURCE
+#define _XOPEN_SOURCE // for popen/pclose
 #endif
-
-#include <termios.h>
+#endif
 
 #include <stdio.h>
 #include <string.h>
-#include <wchar.h>
-#include <locale.h>
 
 #include "lpcli.h"
 
@@ -40,19 +38,14 @@ int lpcli_clipboardcopy(const char *text)
 {
 #ifdef USE_XCLIP
 	FILE *pout = popen("xclip -selection clipboard", "w");
-	if (!pout)
-	{
-		return LPCLI_FAIL;
-	}
+	if (!pout) {return LPCLI_FAIL;}
 	fprintf(pout, "%s", text);
 	fflush(pout);
 	pclose(pout);
-	
-	return LPCLI_OK;
 #else
 	// https://github.com/ccxvii/snippets/blob/master/x11clipboard.c
 	Display *display = XOpenDisplay(NULL);
-	
+
 	Atom clipboard = XInternAtom(display, "CLIPBOARD", 0);
 	Atom targets = XInternAtom(display, "TARGETS", False);
 	Atom textatoms[] =
@@ -61,28 +54,25 @@ int lpcli_clipboardcopy(const char *text)
 		XA_STRING,
 		XInternAtom(display, "TEXT", False),
 	};
-	
+
 	int textatoms_len = sizeof(textatoms) / sizeof(Atom);
-	
+
 	Window window = XCreateSimpleWindow(display, DefaultRootWindow(display),
-			0, 0, 1, 1, 0, CopyFromParent, CopyFromParent);
+	                                    0, 0, 1, 1, 0, CopyFromParent, CopyFromParent);
 	XSetSelectionOwner(display, clipboard, window, CurrentTime);
 	Window owner = XGetSelectionOwner(display, clipboard);
-	if (window != owner)
-	{
-		return LPCLI_FAIL;
-	}
-	
+	if (window != owner) {return LPCLI_FAIL;}
+
 	XEvent event;
 	while (1)
 	{
 		XNextEvent(display, &event);
-		
+
 		switch (event.type)
 		{
 		case SelectionClear:
 			return LPCLI_OK;
-			
+
 		case SelectionRequest:
 		{
 			XSelectionRequestEvent *sre = &event.xselectionrequest;
@@ -91,41 +81,44 @@ int lpcli_clipboardcopy(const char *text)
 			{
 				sre->property = sre->target;
 			}
-			
+
 			XSelectionEvent se =
 			{
 				.type = SelectionNotify, .serial = 0, .send_event = False, .display = display,
 				.requestor = sre->requestor, .selection = sre->selection, .target = sre->target,
 				.property = sre->property, .time = CurrentTime
 			};
-			
+
 			int canpaste = 0;
-			for (int i = 0; i < textatoms_len; i++)
-			{
-				if (sre->target != None && sre->target == textatoms[i])
-				{
-					canpaste = 1;
-					break;
-				}
-			}
-			
 			if (sre->target == targets)
 			{
 				XChangeProperty(display, sre->requestor, sre->property, sre->target,
-					32, PropModeReplace, (unsigned char *) textatoms, textatoms_len);
-			}
-			else if (canpaste)
-			{
-				XChangeProperty(display, sre->requestor, sre->property, sre->target,
-					8, PropModeReplace, (unsigned char *) text, strlen(text));
+				                32, PropModeReplace, (unsigned char *) textatoms, textatoms_len);
 			}
 			else
 			{
-				se.property = None;
+				for (int i = 0; i < textatoms_len; i++)
+				{
+					if (sre->target == textatoms[i])
+					{
+						canpaste = 1;
+						break;
+					}
+				}
+
+				if (canpaste)
+				{
+					XChangeProperty(display, sre->requestor, sre->property, sre->target,
+					                8, PropModeReplace, (unsigned char *) text, strlen(text));
+				}
+				else
+				{
+					se.property = None;
+				}
 			}
-			
+
 			XSendEvent(display, sre->requestor, False, 0, (XEvent *) &se);
-			if (canpaste)
+			if (canpaste) // disown
 			{
 				XSetSelectionOwner(display, clipboard, None, CurrentTime);
 			}
@@ -133,35 +126,32 @@ int lpcli_clipboardcopy(const char *text)
 		break;
 		}
 	}
-	
+#endif
 	return LPCLI_OK;
-#endif
 }
 
-#if __WCHAR_MAX__ <= 0xFFFF && __WCHAR_MAX__ >=0x0100
-#define UTF16_MODE
+
+#include <termios.h>
+#include <wchar.h>
+
+#if __WCHAR_MAX__ < 0x10FFFF
+// Fixme: Because then fgetws will use some non-standard wchar encoding.
+//        However if the terminal encoding is already utf-8,
+//        there is no (need for any) conversion anyway.
+#pragma message "Unsupported wchar_t type"
+#define NOCONVERSION
 #endif
 
-#ifdef UTF16_MODE
-#define SP_HI_START 0xD800
-#define SP_HI_END   0xDBFF
-#define SP_LO_START 0xDC00
-#define SP_LO_END   0xDFFF
-unsigned long sp_to_uni(wchar_t hi, wchar_t lo)
-{
-	if (hi < SP_HI_START || hi > SP_HI_END)
-		return 0;
-	if (lo < SP_LO_START || hi > SP_LO_END)
-		return 0;
-	return ((hi - SP_HI_START) << 10) + (lo - SP_LO_START) + 0x10000;
-}
-#endif //UTF16_MODE
+#ifndef NOCONVERSION
+
+#include <locale.h>
+#include <langinfo.h>
 
 #define UTF8_1 0x007FUL
 #define UTF8_2 0x07FFUL
 #define UTF8_3 0xFFFFUL
 #define UTF8_4 0x10FFFFUL
-static int uni_to_utf8(unsigned long uc, unsigned char *utf8)
+static int uc_toutf8(unsigned long uc, unsigned char *utf8)
 {
 	if (uc <= UTF8_1)
 	{
@@ -176,12 +166,6 @@ static int uni_to_utf8(unsigned long uc, unsigned char *utf8)
 	}
 	if (uc <= UTF8_3)
 	{
-#ifdef UTF16_MODE
-		if (uc >= SP_HI_START && uc <= SP_LO_END)
-		{
-			return -1;
-		}
-#endif //UTF16_MODE
 		utf8[0] = 0xE0 | ((uc >> 12) & 0x0F);
 		utf8[1] = 0x80 | ((uc >>  6) & 0x3F);
 		utf8[2] = 0x80 | ((uc >>  0) & 0x3F);
@@ -198,130 +182,76 @@ static int uni_to_utf8(unsigned long uc, unsigned char *utf8)
 	return 0;
 }
 
-static int uni_utf8_len(unsigned long uc)
+static int uc_utf8len(unsigned long uc)
 {
-	if (uc <= UTF8_1)
-	{
-		return 1;
-	}
-	if (uc <= UTF8_2)
-	{
-		return 2;
-	}
-	if (uc <= UTF8_3)
-	{
-#ifdef UTF16_MODE
-		if (uc >= SP_HI_START && uc <= SP_LO_END)
-		{
-			return -1;
-		}
-#endif //UTF16_MODE
-		return 3;
-	}
-	if (uc <= UTF8_4)
-	{
-		return 4;
-	}
+	if (uc <= UTF8_1) {return 1;}
+	if (uc <= UTF8_2) {return 2;}
+	if (uc <= UTF8_3) {return 3;}
+	if (uc <= UTF8_4) {return 4;}
 	return 0;
 }
 
-static size_t wcs_utf8_len(const wchar_t *wcs, size_t wlen)
+static size_t wcs_utf8len(const wchar_t *wcs, size_t wcslen)
 {
-	unsigned i;
 	int len;
 	size_t tlen = 0;
-	for (i = 0; i < wlen; i++)
+	for (unsigned i = 0; i < wcslen; i++)
 	{
-		len = uni_utf8_len(wcs[i]);
-		if (len == 0)
-			return 0;
-#ifdef UTF16_MODE
-		if (len == -1)
-		{
-			i++;
-			if (i >= wlen)
-				return 0;
-			unsigned long uc = sp_to_uni(wcs[i - 1], wcs[i]);
-			if (uc == 0)
-				return 0;
-			len = uni_utf8_len(uc);
-		}
-#endif //UTF16_MODE
+		len = uc_utf8len(wcs[i]);
+		if (len == 0) {return 0;}
 		tlen += len;
 	}
 	return tlen;
 }
 
-static int wcs_to_utf8(const wchar_t *wcs, size_t wlen, unsigned char *u8, size_t u8len)
+static int wcs_toutf8(const wchar_t *wcs, size_t wlen, unsigned char *out, size_t outlen)
 {
-	if (wlen == 0)
-		return 0;
-	size_t tlen = wcs_utf8_len(wcs, wlen);
-	if (tlen == 0 || u8len < tlen)
-		return -1;
-	//unsigned char buffer[tlen];
-	//unsigned char *p = buffer;
-	unsigned char *p = u8;
-	unsigned i;
-	int len;
-	for (i = 0; i < wlen; i++)
+	if (wlen == 0) {return 0;}
+
+	size_t tlen = wcs_utf8len(wcs, wlen);
+	if (tlen == 0 || outlen < tlen) {return -1;}
+
+	unsigned char *p = out;
+	for (unsigned i = 0; i < wlen; i++)
 	{
-		len = uni_to_utf8(wcs[i], p);
-		//if(len == 0) // redundant
-		//	return 0;
-#ifdef UTF16_MODE
-		if (len == -1)
-		{
-			i++;
-			//if(i >= wlen) // redundant
-			//	return 0;
-			unsigned long uc = sp_to_uni(wcs[i - 1], wcs[i]);
-			//if(uc == 0) // redundant
-			//	return 0;
-			len = uni_to_utf8(uc, p);
-		}
-#endif //UTF16_MODE
-		p += len;
+		p += uc_toutf8(wcs[i], p);
 	}
-	//memcpy(u8, buffer, tlen);
 	return tlen;
 }
 
 // read as wchar convert to utf8
-int lpcli_readpassword_u8(char *out, size_t outl)
+static int lpcli_readpassword_utf8(char *out, size_t outlen)
 {
 	wchar_t input[MAX_INPUTWCS];
 	wchar_t *wp = fgetws(input, MAX_INPUTWCS, stdin);
-	if (wp == NULL)
-		return LPCLI_FAIL;
+	if (wp == NULL) {return LPCLI_FAIL;}
+
 	int len = wcscspn(input, L"\r\n");
-	if (len == 0)
-		return LPCLI_FAIL;
-	len = wcs_to_utf8(input, len, (unsigned char *) out, outl - 1);
+	if (len == 0) {return LPCLI_FAIL;}
+
+	len = wcs_toutf8(input, len, (unsigned char *) out, outlen - 1);
 	lpcli_zeromemory(input, sizeof input);
-	if (len <= 0)
-	{
-		return LPCLI_FAIL;
-	}
+	if (len <= 0) {return LPCLI_FAIL;}
+
 	out[len] = 0;
 	return LPCLI_OK;
 }
+#endif // NOCONVERSION
 
 // read directly, no conversion
-int lpcli_readpassword_nc(char *out, size_t outl)
+static int lpcli_readpassword_nc(char *out, size_t outlen)
 {
-	out = fgets(out, outl, stdin);
-	if (out == NULL)
-		return LPCLI_FAIL;
+	out = fgets(out, outlen, stdin);
+	if (out == NULL) {return LPCLI_FAIL;}
+
 	int len = strcspn(out, "\r\n");
-	if (len == 0)
-		return LPCLI_FAIL;
+	if (len == 0) {return LPCLI_FAIL;}
+
 	out[len] = 0;
 	return LPCLI_OK;
 }
 
-#include <langinfo.h>
-int lpcli_readpassword(const char *prompt, char *out, size_t outl)
+int lpcli_readpassword(const char *prompt, char *out, size_t outlen)
 {
 	printf("%s", prompt);
 	static struct termios told, tnew;
@@ -330,18 +260,19 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 	tnew.c_lflag &= ~ICANON;
 	tnew.c_lflag &= ~ECHO;
 	tcsetattr(0, TCSANOW, &tnew);
-	
+
 	int ret;
-	char *codeset = nl_langinfo(CODESET);
-	if (strcmp(codeset, "UTF-8") == 0)
+#ifndef NOCONVERSION
+	if (strcmp(nl_langinfo(CODESET), "UTF-8") != 0)
 	{
-		ret = lpcli_readpassword_nc(out, outl);
+		ret = lpcli_readpassword_utf8(out, outlen);
 	}
 	else
+#endif // NOCONVERSION
 	{
-		ret = lpcli_readpassword_u8(out, outl);
+		ret = lpcli_readpassword_nc(out, outlen);
 	}
-	
+
 	tcsetattr(0, TCSANOW, &told);
 	printf("\n");
 	return ret;
@@ -349,7 +280,9 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outl)
 
 int main(int argc, char **argv)
 {
+#ifndef NOCONVERSION
 	setlocale(LC_ALL, "");
+#endif
 	int ret = lpcli_main(argc, argv);
 	return ret;
 }
