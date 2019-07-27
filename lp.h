@@ -87,7 +87,7 @@ LP_DEF unsigned LP_check_charsets(unsigned);
 LP_DEF int LP_generate(LP_CTX *ctx, const char *site,  const char *login, const char *secret);
 #endif // LP_INCLUDE
 
-// - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - -
+//------------------------------------------------------------------------------
 
 #ifdef LP_IMPLEMENTATION
 
@@ -131,10 +131,9 @@ static const charset_t cslist[] =
 #endif
 static void init_entropy(uint32_t *ent, uint8_t *buffer, uint32_t buflen)
 {
-	int i = buflen - 4;
 	int j = 0;
 	// NOTE: assumes buflen is a multiple of 4
-	for (; i >= 0; i -= 4, j++)
+	for (int i = buflen - 4; i >= 0; i -= 4, j++)
 	{
 		ent[j] = BE_VALUE((buffer + i));
 	}
@@ -148,14 +147,16 @@ static void init_entropy(uint32_t *ent, uint8_t *buffer, uint32_t buflen)
 
 static uint32_t div_entropy(uint32_t *ent, uint32_t d)
 {
-	int i = ENT_LEN - 1;
-	for (; i >= 0; i--)
+	int i;
+	for (i = ENT_LEN - 1; i >= 0; i--)
 	{
-		if (ent[i] != 0) {break;}
+		if (ent[i] != 0)
+			break;
 	}
 	
-	if (i == -1) {return 0;}
-	
+	if (i == -1)
+		return 0;
+		
 	uint64_t qt = 0;
 	uint64_t r = 0;
 	for (; i >= 0; i--)
@@ -187,8 +188,9 @@ static unsigned generate_int(LP_CTX *ctx, int setlen)
 
 static unsigned mystrnlen(const char *s, unsigned max)
 {
-	if (!s || !*s) {return 0;}
-	
+	if (!s || !*s)
+		return 0;
+		
 	unsigned i;
 	for (i = 0; (i < max) && s[i]; i++);
 	return i;
@@ -203,8 +205,9 @@ static unsigned mystrlen(const char *s)
 
 static unsigned myhexlen(unsigned u)
 {
-	if (u == 0) {return 1;}
-	
+	if (u == 0)
+		return 1;
+		
 	unsigned d;
 	for (d = 0; u; d++)
 	{
@@ -252,9 +255,8 @@ static int generate(LP_CTX *ctx, const char *secret, unsigned secretlen)
 	generate_chars(ctx, ctx->buffer, len, charset->value, charset->length);
 	
 	// Select numsets characters (one from each subset of charset)
-	unsigned i;
 	unsigned offset = 0;
-	for (i = 0; i < charset->numsets; i++)
+	for (unsigned i = 0; i < charset->numsets; i++)
 	{
 		ctx->buffer[len + i] = generate_char(ctx, charset->value + offset, charset->lensets[i]);
 		offset += charset->lensets[i];
@@ -267,7 +269,7 @@ static int generate(LP_CTX *ctx, const char *secret, unsigned secretlen)
 	}
 	
 	ctx->buffer[len] = 0;
-	ctx->buflen = len; // no need but set it anyway
+	ctx->buflen = len;
 	return len;
 }
 

@@ -44,7 +44,7 @@ PBKDF2_SHA256_DEF void pbkdf2_sha256(HMAC_SHA256_CTX *ctx,
 
 #endif // PBKDF2_SHA256_INCLUDE
 
-//------------------------------------------------------------
+//------------------------------------------------------------------------------
 
 #ifdef PBKDF2_SHA256_IMPLEMENTATION
 
@@ -277,7 +277,7 @@ PBKDF2_SHA256_DEF void pbkdf2_sha256(HMAC_SHA256_CTX *hmac,
 	uint32_t len = hlen;
 	for (i = 1; i <= l; i++)
 	{
-		if (i == l) {len = r;}
+		if (i == l) { len = r; }
 		count[0] = (i >> 24) & 0xFF;
 		count[1] = (i >> 16) & 0xFF;
 		count[2] = (i >>  8) & 0xFF;

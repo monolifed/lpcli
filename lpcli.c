@@ -112,8 +112,9 @@ static void set_opt_charsets(LPCLI_OPTS *opts, unsigned flag)
 
 static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 {
-	if (argc < 2) {return LPCLI_FAIL;}
-	
+	if (argc < 2)
+		return LPCLI_FAIL;
+		
 	int i = 0;
 	char *ptr;
 	char *ptrEnd;
@@ -141,19 +142,22 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 	{
 		if (!post_shopt)
 		{
-			if (*ptr != '-') {return LPCLI_FAIL;}
+			if (*ptr != '-')
+				return LPCLI_FAIL;
 			ptr++;
 		}
 		
 		switch (*ptr)
 		{
 		case '\0': // -
-			if (!post_shopt) {return LPCLI_FAIL;}
+			if (!post_shopt)
+				return LPCLI_FAIL;
 			post_shopt = false; //stop short option reading
 			ptr = argv[++i];
 			break;
 		case '-': // --
-			if (post_shopt) {return LPCLI_FAIL;}
+			if (post_shopt)
+				return LPCLI_FAIL;
 			ptr++;
 			if (strcmp(ptr, "lowercase") == 0)
 			{
@@ -177,15 +181,19 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 			}
 			else if (strcmp(ptr, "length") == 0)
 			{
-				if (!(ptr = argv[++i])) {return LPCLI_FAIL;} //next!=null
+				if (!(ptr = argv[++i]))
+					return LPCLI_FAIL; //next!=null
 				set_opt_length(opts, strtol(ptr, &ptrEnd, 10));
-				if (*ptrEnd != '\0') {return LPCLI_FAIL;}
+				if (*ptrEnd != '\0')
+					return LPCLI_FAIL;
 			}
 			else if (strcmp(ptr, "counter") == 0)
 			{
-				if (!(ptr = argv[++i])) {return LPCLI_FAIL;} //next!=null
+				if (!(ptr = argv[++i]))
+					return LPCLI_FAIL; //next!=null
 				set_opt_counter(opts, strtol(ptr, &ptrEnd, 10));
-				if (*ptrEnd != '\0') {return LPCLI_FAIL;}
+				if (*ptrEnd != '\0')
+					return LPCLI_FAIL;
 			}
 			else
 			{
@@ -195,14 +203,16 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 			break;
 		case 'n':
 			ptr++;
-			if (*ptr == '\0' && !(ptr = argv[++i])) {return LPCLI_FAIL;}
+			if (*ptr == '\0' && !(ptr = argv[++i]))
+				return LPCLI_FAIL;
 			set_opt_length(opts, strtol(ptr, &ptrEnd, 10));
 			ptr = ptrEnd;
 			post_shopt = true;
 			break;
 		case 'c':
 			ptr++;
-			if (*ptr == '\0' && !(ptr = argv[++i])) {return LPCLI_FAIL;}
+			if (*ptr == '\0' && !(ptr = argv[++i]))
+				return LPCLI_FAIL;
 			set_opt_counter(opts, strtol(ptr, &ptrEnd, 10));
 			ptr = ptrEnd;
 			post_shopt = true;
