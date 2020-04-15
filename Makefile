@@ -1,27 +1,25 @@
-COMMON_FLAGS := -Wall -Wextra -pedantic -std=c99
-LPCLI := lpcli
-SETGEN := setgen
-CFLAGS = $(COMMON_FLAGS)
+CFLAGS := -Wall -Wextra -Wsign-conversion -pedantic -std=c99
+APPNAME := lpcli
 
 ifeq ($(OS),Windows_NT)
 	PLATFORM := win
 	RM := del /Q
-	EXT := .exe
 	CC := gcc
+	APPNAME := $(APPNAME).exe
 else
 	PLATFORM := posix
 	ifeq ($(HAS_XCLIP), 1)
-		CFLAGS = $(COMMON_FLAGS) -DUSE_XCLIP
+		CFLAGS := $(CFLAGS) -DUSE_XCLIP
 	else
-		CFLAGS = $(COMMON_FLAGS) -lX11
+		CFLAGS := $(CFLAGS) -lX11
 	endif
 endif
 
-LPCLI_DEPS := lpcli.h lp.h pbkdf2_sha256.h
-LPCLI_CODE := lpcli_$(PLATFORM).c lpcli.c
-$(LPCLI)$(EXT) : $(LPCLI_DEPS)
-$(LPCLI)$(EXT) : $(LPCLI_CODE)
-	$(CC) $(CFLAGS) -o $@ $(LPCLI_CODE)
+DEPS := lpcli.h lp.h pbkdf2_sha256.h
+CODE := lpcli_$(PLATFORM).c lpcli.c
+$(APPNAME): $(DEPS)
+$(APPNAME): $(CODE)
+	$(CC) $(CFLAGS) -o $@ $(CODE)
 
-clean :
-	$(RM) $(LPCLI)$(EXT)
+clean:
+	$(RM) $(APPNAME)

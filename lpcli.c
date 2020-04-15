@@ -73,8 +73,8 @@ typedef struct parsed_args
 	const char *login;
 	const char *password;
 	unsigned charsets;
-	int length;
-	int counter;
+	unsigned length;
+	unsigned counter;
 	unsigned flags;
 } LPCLI_OPTS;
 
@@ -87,18 +87,18 @@ enum
 	OPTS_PRINT    = 0x08,
 };
 
-static bool is_option_set(LPCLI_OPTS *opts, int flag)
+static bool is_option_set(LPCLI_OPTS *opts, unsigned flag)
 {
 	return (opts->flags & flag) ? true : false;
 }
 
-static void set_opt_length(LPCLI_OPTS *opts, int value)
+static void set_opt_length(LPCLI_OPTS *opts, unsigned value)
 {
 	opts->flags |= OPTS_LENGTH;
 	opts->length = value;
 }
 
-static void set_opt_counter(LPCLI_OPTS *opts, int value)
+static void set_opt_counter(LPCLI_OPTS *opts, unsigned value)
 {
 	opts->flags |= OPTS_COUNTER;
 	opts->counter = value;
@@ -183,7 +183,7 @@ static int read_args(int argc, char **argv, LPCLI_OPTS *opts)
 			{
 				if (!(ptr = argv[++i]))
 					return LPCLI_FAIL; //next!=null
-				set_opt_length(opts, strtol(ptr, &ptrEnd, 10));
+				set_opt_length(opts, strtol(ptr, &ptrEnd, 10)); //FIXME: handle negative?
 				if (*ptrEnd != '\0')
 					return LPCLI_FAIL;
 			}

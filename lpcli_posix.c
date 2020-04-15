@@ -166,11 +166,11 @@ int lpcli_clipboardcopy(const char *text)
 #include <locale.h>
 #include <langinfo.h>
 
-#define UTF8_1 0x007FUL
-#define UTF8_2 0x07FFUL
-#define UTF8_3 0xFFFFUL
-#define UTF8_4 0x10FFFFUL
-static int uc_toutf8(unsigned long uc, unsigned char *utf8)
+#define UTF8_1 0x007F
+#define UTF8_2 0x07FF
+#define UTF8_3 0xFFFF
+#define UTF8_4 0x10FFFF
+static size_t uc_toutf8(wchar_t uc, unsigned char *utf8)
 {
 	if (uc <= UTF8_1)
 	{
@@ -201,7 +201,7 @@ static int uc_toutf8(unsigned long uc, unsigned char *utf8)
 	return 0;
 }
 
-static int uc_utf8len(unsigned long uc)
+static size_t uc_utf8len(wchar_t uc)
 {
 	if (uc <= UTF8_1) { return 1; }
 	if (uc <= UTF8_2) { return 2; }
@@ -210,11 +210,11 @@ static int uc_utf8len(unsigned long uc)
 	return 0;
 }
 
-static size_t wcs_utf8len(const wchar_t *wcs, size_t wcslen)
+static size_t wcs_utf8len(const wchar_t *wcs, size_t wlen)
 {
-	int len;
+	size_t len;
 	size_t tlen = 0;
-	for (unsigned i = 0; i < wcslen; i++)
+	for (size_t i = 0; i < wlen; i++)
 	{
 		len = uc_utf8len(wcs[i]);
 		if (len == 0)
@@ -224,17 +224,17 @@ static size_t wcs_utf8len(const wchar_t *wcs, size_t wcslen)
 	return tlen;
 }
 
-static int wcs_toutf8(const wchar_t *wcs, size_t wlen, unsigned char *out, size_t outlen)
+static size_t wcs_toutf8(const wchar_t *wcs, size_t wlen, unsigned char *out, size_t outlen)
 {
 	if (wlen == 0)
 		return 0;
 		
 	size_t tlen = wcs_utf8len(wcs, wlen);
 	if (tlen == 0 || outlen < tlen)
-		return -1;
+		return 0;
 		
 	unsigned char *p = out;
-	for (unsigned i = 0; i < wlen; i++)
+	for (size_t i = 0; i < wlen; i++)
 	{
 		p += uc_toutf8(wcs[i], p);
 	}
@@ -249,15 +249,15 @@ static int lpcli_readpassword_utf8(char *out, size_t outlen)
 	if (wp == NULL)
 		return LPCLI_FAIL;
 		
-	int len = wcscspn(input, L"\r\n");
+	size_t len = wcscspn(input, L"\r\n");
 	if (len == 0)
 		return LPCLI_FAIL;
 		
 	len = wcs_toutf8(input, len, (unsigned char *) out, outlen - 1);
 	lpcli_zeromemory(input, sizeof input);
-	if (len <= 0)
+	if (len == 0)
 		return LPCLI_FAIL;
-		
+	
 	out[len] = 0;
 	return LPCLI_OK;
 }
@@ -284,8 +284,8 @@ int lpcli_readpassword(const char *prompt, char *out, size_t outlen)
 	static struct termios told, tnew;
 	tcgetattr(0, &told);
 	tnew = told;
-	tnew.c_lflag &= ~ICANON;
-	tnew.c_lflag &= ~ECHO;
+	tnew.c_lflag &= (tcflag_t) ~ICANON;
+	tnew.c_lflag &= (tcflag_t) ~ECHO;
 	tcsetattr(0, TCSANOW, &tnew);
 	
 	int ret;

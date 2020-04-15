@@ -123,27 +123,21 @@ static const charset_t cslist[] =
 	{"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~", 94, 4, {26, 26, 10, 32}}
 };
 
-
-#ifndef BIG_ENDIAN
-#define BE_VALUE(S) (S[0]<<24 | S[1]<<16 | S[2]<<8 | S[3])
-#else
-#define BE_VALUE(S) (* (uint32_t *) (S))
-#endif
 static void init_entropy(uint32_t *ent, uint8_t *buffer, uint32_t buflen)
 {
-	int j = 0;
 	// NOTE: assumes buflen is a multiple of 4
-	for (int i = buflen - 4; i >= 0; i -= 4, j++)
+	unsigned l = 0;
+	for (uint8_t *s = buffer + buflen - 4; s >= buffer; s -= 4)
 	{
-		ent[j] = BE_VALUE((buffer + i));
+		ent[l++] = (uint32_t) s[0] << 24 | (uint32_t) s[1] << 16 | 
+		           (uint32_t) s[2] <<  8 | (uint32_t) s[3];
 	}
 	
-	for (; j < ENT_LEN; j++)
+	for (l = buflen / 4; l < ENT_LEN; l++)
 	{
-		ent[j] = 0;
+		ent[l] = 0;
 	}
 }
-#undef BE_VALUE
 
 static uint32_t div_entropy(uint32_t *ent, uint32_t d)
 {
@@ -176,12 +170,12 @@ static void generate_chars(LP_CTX *ctx, char *dst, unsigned dstlen, const char *
 	}
 }
 
-static char generate_char(LP_CTX *ctx, const char *set, int setlen)
+static char generate_char(LP_CTX *ctx, const char *set, unsigned setlen)
 {
 	return set[div_entropy(ctx->entropy, setlen)];
 }
 
-static unsigned generate_int(LP_CTX *ctx, int setlen)
+static unsigned generate_int(LP_CTX *ctx, unsigned setlen)
 {
 	return div_entropy(ctx->entropy, setlen);
 }
@@ -241,7 +235,7 @@ static void mypushchar(char *dst, unsigned len, unsigned pos, char c)
 	dst[pos] = c;
 }
 
-static int generate(LP_CTX *ctx, const char *secret, unsigned secretlen)
+static unsigned generate(LP_CTX *ctx, const char *secret, unsigned secretlen)
 {
 	// Create entropy number from PBKDF2
 	pbkdf2_sha256(&ctx->hmac, (uint8_t *) secret, secretlen,
@@ -341,7 +335,7 @@ LP_DEF int LP_generate(LP_CTX *ctx, const char *site,  const char *login, const 
 	mysprinthex(p, ctrlen, ctx->counter);
 	ctx->buflen = saltlen;
 	
-	return generate(ctx, secret, secretlen);
+	return (int) generate(ctx, secret, secretlen);
 }
 #undef LP_ASSERT
 
