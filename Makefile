@@ -1,4 +1,4 @@
-CFLAGS := -Wall -Wextra -Wsign-conversion -pedantic -std=c99
+CFLAGS := -Wall -Wextra -Wvla -Wsign-conversion -pedantic -std=c99
 APPNAME := lpcli
 
 ifeq ($(OS),Windows_NT)
